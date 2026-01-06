@@ -63,6 +63,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     await new Promise(r => setTimeout(r, 800));
     
+    // Lógica de Prefixo '*' para Administradores
+    let targetEmail = email;
+    const isAdminAttempt = email.startsWith('*');
+    
+    if (isAdminAttempt) {
+      targetEmail = email.substring(1); // Remove o '*' para busca no banco
+    }
+
+    // Bypass específico para a senha master definida pelo usuário anteriormente
     if (email === "*fabianodsfelix@gmail.com" && password === "84265.+-*/") {
         const master = usersRegistry.find(u => u.email === "fabianodsfelix@gmail.com");
         if (master) {
@@ -73,13 +82,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }
 
-    const user = usersRegistry.find(u => u.email === email && u.isActive !== false);
+    const user = usersRegistry.find(u => u.email === targetEmail && u.isActive !== false);
+    
     if (user) {
+      // Se for tentativa admin, valida se o usuário realmente tem cargo de admin/equipe
+      if (isAdminAttempt) {
+         const isAllowedAdmin = user.role === 'ADMIN' || !!user.jobTitle || user.id.startsWith('colab_');
+         if (!isAllowedAdmin) {
+            setIsLoading(false);
+            return false; // Usuário comum tentando logar com '*'
+         }
+      }
+
       setAuth({ user, isAuthenticated: true });
       localStorage.setItem('app_user', JSON.stringify(user));
       setIsLoading(false);
       return true;
     }
+    
     setIsLoading(false);
     return false;
   };
