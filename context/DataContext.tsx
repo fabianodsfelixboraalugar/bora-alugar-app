@@ -1,263 +1,292 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { get, set } from 'idb-keyval';
-import { Item, Rental, Review, RentalStatus, Message, Notification, NotificationType, AppLog } from '../types';
-import { MOCK_ITEMS, MOCK_REVIEWS } from '../mockData';
-
-interface Coords {
-  lat: number;
-  lng: number;
-}
+import { supabase } from '../lib/supabase';
+import { Item, Rental, Review, Message, Notification, NotificationType, RentalStatus, AppLog } from '../types';
 
 interface DataContextType {
   items: Item[];
   rentals: Rental[];
-  reviews: Review[];
   messages: Message[];
   notifications: Notification[];
+  reviews: Review[];
   logs: AppLog[];
+  userLocation: { lat: number, lng: number } | null;
   isLoading: boolean;
-  userLocation: Coords | null;
-  setUserLocation: (coords: Coords | null) => void;
-  addItem: (item: Item) => Promise<void>;
+  setUserLocation: (loc: { lat: number, lng: number } | null) => void;
+  addItem: (item: any) => Promise<void>;
   removeItem: (itemId: string) => Promise<void>;
   updateItem: (itemId: string, data: Partial<Item>) => Promise<void>;
-  addRental: (rental: Rental) => Promise<void>;
-  updateRentalStatus: (id: string, status: RentalStatus) => Promise<void>;
-  submitReview: (review: Omit<Review, 'id' | 'date' | 'isHidden'>) => Promise<void>;
-  sendMessage: (senderId: string, receiverId: string, content: string) => Promise<void>;
-  markAsRead: (messageId: string) => Promise<void>;
-  deleteConversation: (userId: string, partnerId: string) => Promise<void>;
   getItemById: (id: string) => Item | undefined;
+  addRental: (rental: any) => Promise<void>;
+  updateRentalStatus: (id: string, status: RentalStatus) => Promise<void>;
   getRentalsByUserId: (userId: string) => Rental[];
   getRentalsByOwnerId: (ownerId: string) => Rental[];
-  getReviewByTransaction: (transactionId: string, reviewerId: string) => Review | undefined;
-  searchItems: (query: string, category?: string, city?: string) => Item[];
-  calculateDistance: (lat1: number, lon1: number, lat2: number, lon2: number) => number;
-  addNotification: (userId: string, type: NotificationType, title: string, message: string, link: string) => Promise<void>;
-  markNotificationAsRead: (notificationId: string) => Promise<void>;
-  clearNotifications: (userId: string) => Promise<void>;
   checkItemAvailability: (itemId: string, startDate: string, endDate: string) => boolean;
-  addLog: (action: string, details: string, userId?: string, userEmail?: string) => Promise<void>;
-  clearLogs: () => Promise<void>;
+  sendMessage: (senderId: string, receiverId: string, content: string) => Promise<void>;
+  markAsRead: (messageId: string) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
+  deleteConversation: (userId: string, partnerId: string) => Promise<void>;
   clearAllMessages: (userId: string) => Promise<void>;
+  addNotification: (userId: string, type: NotificationType, title: string, message: string, link: string) => Promise<void>;
+  markNotificationAsRead: (id: string) => Promise<void>;
+  clearNotifications: (userId: string) => Promise<void>;
+  submitReview: (review: any) => Promise<void>;
+  getReviewByTransaction: (transactionId: string, reviewerId: string) => Review | undefined;
+  calculateDistance: (lat1: number, lon1: number, lat2: number, lon2: number) => number;
   deleteUserData: (userId: string) => Promise<void>;
+  clearLogs: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
+
+export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [items, setItems] = useState<Item[]>([]);
+  const [rentals, setRentals] = useState<Rental[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [logs, setLogs] = useState<AppLog[]>([]);
+  const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const [
+        { data: itemsData },
+        { data: rentalsData },
+        { data: messagesData },
+        { data: notificationsData }
+      ] = await Promise.all([
+        supabase.from('items').select('*').order('created_at', { ascending: false }),
+        supabase.from('rentals').select('*').order('created_at', { ascending: false }),
+        supabase.from('messages').select('*').order('timestamp', { ascending: true }),
+        supabase.from('notifications').select('*').order('created_at', { ascending: false })
+      ]);
+
+      setItems((itemsData as any) || []);
+      setRentals((rentalsData as any) || []);
+      setMessages((messagesData as any) || []);
+      setNotifications((notificationsData as any) || []);
+    } catch (error) {
+      console.error("Erro ao carregar dados:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+
+    // Habilita Real-time para mensagens e notificações
+    const channel = supabase.channel('schema-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  // Helper para converter Base64 em Blob para upload real
+  const base64ToBlob = (base64: string) => {
+    const parts = base64.split(';base64,');
+    const contentType = parts[0].split(':')[1];
+    const raw = window.atob(parts[1]);
+    const rawLength = raw.length;
+    const uInt8Array = new Uint8Array(rawLength);
+    for (let i = 0; i < rawLength; ++i) {
+      uInt8Array[i] = raw.charCodeAt(i);
+    }
+    return new Blob([uInt8Array], { type: contentType });
+  };
+
+  const addItem = async (itemData: any) => {
+    const uploadedImages = [];
+    
+    // Faz o upload real de cada imagem para o Storage
+    for (const [index, base64] of itemData.images.entries()) {
+      if (base64.startsWith('data:')) {
+        const blob = base64ToBlob(base64);
+        const fileName = `${Date.now()}_${index}.png`;
+        const { data, error: uploadError } = await supabase.storage
+          .from('item-images')
+          .upload(fileName, blob);
+        
+        if (uploadError) throw uploadError;
+        
+        const { data: { publicUrl } } = supabase.storage
+          .from('item-images')
+          .getPublicUrl(fileName);
+        
+        uploadedImages.push(publicUrl);
+      } else {
+        uploadedImages.push(base64);
+      }
+    }
+
+    const { error } = await supabase.from('items').insert([{
+      ...itemData,
+      images: uploadedImages,
+      price_per_day: itemData.pricePerDay // Ajuste de camelCase para snake_case do Postgres
+    }]);
+
+    if (error) throw error;
+    await fetchData();
+  };
+
+  const removeItem = async (itemId: string) => {
+    const { error } = await supabase.from('items').delete().eq('id', itemId);
+    if (error) throw error;
+    await fetchData();
+  };
+
+  const updateItem = async (itemId: string, data: Partial<Item>) => {
+    const { error } = await supabase.from('items').update(data).eq('id', itemId);
+    if (error) throw error;
+    await fetchData();
+  };
+
+  const getItemById = (id: string) => items.find(i => i.id === id);
+
+  const addRental = async (rentalData: any) => {
+    const { error } = await supabase.from('rentals').insert([rentalData]);
+    if (error) throw error;
+    
+    await addNotification(
+      rentalData.owner_id, 
+      NotificationType.RENTAL_REQUEST, 
+      'Novo Aluguel!', 
+      `Pedido para: ${rentalData.item_title}`, 
+      '/dashboard'
+    );
+    await fetchData();
+  };
+
+  const updateRentalStatus = async (id: string, status: RentalStatus) => {
+    const { error } = await supabase.from('rentals').update({ status }).eq('id', id);
+    if (error) throw error;
+    await fetchData();
+  };
+
+  const getRentalsByUserId = (userId: string) => rentals.filter(r => (r as any).renter_id === userId);
+  const getRentalsByOwnerId = (ownerId: string) => rentals.filter(r => (r as any).owner_id === ownerId);
+
+  const checkItemAvailability = (itemId: string, startDate: string, endDate: string) => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    return !rentals.some(r => 
+      r.itemId === itemId && 
+      r.status !== RentalStatus.CANCELLED &&
+      ((start >= new Date(r.startDate) && start <= new Date(r.endDate)) ||
+       (end >= new Date(r.startDate) && end <= new Date(r.endDate)) ||
+       (start <= new Date(r.startDate) && end >= new Date(r.endDate)))
+    );
+  };
+
+  const sendMessage = async (senderId: string, receiverId: string, content: string) => {
+    const { error } = await supabase.from('messages').insert([{
+      sender_id: senderId,
+      receiver_id: receiverId,
+      content,
+      read: false
+    }]);
+    if (error) throw error;
+    await fetchData();
+  };
+
+  const markAsRead = async (messageId: string) => {
+    await supabase.from('messages').update({ read: true }).eq('id', messageId);
+    await fetchData();
+  };
+
+  const deleteMessage = async (messageId: string) => {
+    await supabase.from('messages').delete().eq('id', messageId);
+    await fetchData();
+  };
+
+  const deleteConversation = async (userId: string, partnerId: string) => {
+    await supabase.from('messages').delete()
+      .or(`and(sender_id.eq.${userId},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${userId})`);
+    await fetchData();
+  };
+
+  const clearAllMessages = async (userId: string) => {
+    await supabase.from('messages').delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
+    await fetchData();
+  };
+
+  const addNotification = async (userId: string, type: NotificationType, title: string, message: string, link: string) => {
+    await supabase.from('notifications').insert([{
+      user_id: userId,
+      type,
+      title,
+      message,
+      link,
+      read: false
+    }]);
+    await fetchData();
+  };
+
+  const markNotificationAsRead = async (id: string) => {
+    await supabase.from('notifications').update({ read: true }).eq('id', id);
+    await fetchData();
+  };
+
+  const clearNotifications = async (userId: string) => {
+    await supabase.from('notifications').delete().eq('user_id', userId);
+    await fetchData();
+  };
+
+  const submitReview = async (review: any) => {
+    await supabase.from('reviews').insert([review]);
+    await fetchData();
+  };
+
+  const getReviewByTransaction = (transactionId: string, reviewerId: string) => 
+    reviews.find(r => r.transactionId === transactionId && r.reviewerId === reviewerId);
+
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(R * c);
+  };
+
+  const deleteUserData = async (userId: string) => {
+    await Promise.all([
+      supabase.from('items').delete().eq('owner_id', userId),
+      supabase.from('rentals').delete().or(`renter_id.eq.${userId},owner_id.eq.${userId}`),
+      supabase.from('messages').delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`),
+      supabase.from('notifications').delete().eq('user_id', userId)
+    ]);
+    await fetchData();
+  };
+
+  const clearLogs = async () => {
+    await supabase.from('logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await fetchData();
+  };
+
+  return (
+    <DataContext.Provider value={{ 
+      items, rentals, messages, notifications, reviews, logs, userLocation, isLoading, 
+      setUserLocation, addItem, removeItem, updateItem, getItemById, addRental, updateRentalStatus, 
+      getRentalsByUserId, getRentalsByOwnerId, checkItemAvailability, sendMessage, markAsRead, 
+      deleteMessage, deleteConversation, clearAllMessages, addNotification, markNotificationAsRead, 
+      clearNotifications, submitReview, getReviewByTransaction, calculateDistance, deleteUserData, clearLogs
+    }}>
+      {children}
+    </DataContext.Provider>
+  );
+};
 
 export const useData = () => {
   const context = useContext(DataContext);
   if (!context) throw new Error("useData must be used within DataProvider");
   return context;
-};
-
-export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [items, setItems] = useState<Item[]>([]);
-  const [rentals, setRentals] = useState<Rental[]>([]);
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [logs, setLogs] = useState<AppLog[]>([]);
-  const [userLocation, setUserLocationState] = useState<Coords | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [userIp, setUserIp] = useState<string>('0.0.0.0');
-
-  const simulateNetwork = () => new Promise(resolve => setTimeout(resolve, 600));
-
-  useEffect(() => {
-    const initData = async () => {
-      try {
-        const [storedItems, storedRentals, storedReviews, storedMessages, storedNotifications, storedLogs] = await Promise.all([
-          get('app_items'),
-          get('app_rentals'),
-          get('app_reviews'),
-          get('app_messages'),
-          get('app_notifications'),
-          get('app_audit_logs')
-        ]);
-
-        setItems(storedItems || MOCK_ITEMS);
-        setRentals(storedRentals || []);
-        setReviews(storedReviews || MOCK_REVIEWS);
-        setMessages(storedMessages || []);
-        setNotifications(storedNotifications || []);
-        setLogs(storedLogs || []);
-        
-        const savedLoc = sessionStorage.getItem('user_coords');
-        if (savedLoc) setUserLocationState(JSON.parse(savedLoc));
-
-        try {
-          const res = await fetch('https://api.ipify.org?format=json');
-          const data = await res.json();
-          setUserIp(data.ip);
-        } catch (e) { console.warn("IP Fallback"); }
-
-      } catch (err) {
-        console.error("Local DB Error:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    initData();
-  }, []);
-
-  const addLog = async (action: string, details: string, userId?: string, userEmail?: string) => {
-    const newLog: AppLog = {
-      id: 'log_' + Date.now(),
-      timestamp: new Date().toISOString(),
-      action, details, userId, userEmail, ip: userIp
-    };
-    const updated = [newLog, ...logs];
-    setLogs(updated);
-    await set('app_audit_logs', updated);
-  };
-
-  const clearLogs = async () => {
-    setLogs([]);
-    await set('app_audit_logs', []);
-  };
-
-  const addItem = async (item: Item) => {
-    await simulateNetwork();
-    const updated = [item, ...items];
-    setItems(updated);
-    await set('app_items', updated);
-    await addLog('CRIAÇÃO_ANÚNCIO', `Anúncio: ${item.title}`, item.ownerId, item.ownerName);
-  };
-
-  const removeItem = async (itemId: string) => {
-    const updated = items.filter(i => i.id !== itemId);
-    setItems(updated);
-    await set('app_items', updated);
-  };
-
-  const updateItem = async (itemId: string, data: Partial<Item>) => {
-    const updated = items.map(item => item.id === itemId ? { ...item, ...data } : item);
-    setItems(updated);
-    await set('app_items', updated);
-  };
-
-  const addNotification = async (userId: string, type: NotificationType, title: string, message: string, link: string) => {
-    const newNotif: Notification = {
-      id: 'notif_' + Date.now(),
-      userId, type, title, message, link, read: false, createdAt: new Date().toISOString()
-    };
-    const updated = [newNotif, ...notifications];
-    setNotifications(updated);
-    await set('app_notifications', updated);
-  };
-
-  const markNotificationAsRead = async (notificationId: string) => {
-    const updated = notifications.map(n => n.id === notificationId ? { ...n, read: true } : n);
-    setNotifications(updated);
-    await set('app_notifications', updated);
-  };
-
-  const clearNotifications = async (userId: string) => {
-    const updated = notifications.filter(n => n.userId !== userId);
-    setNotifications(updated);
-    await set('app_notifications', updated);
-  };
-
-  const addRental = async (rental: Rental) => {
-    await simulateNetwork();
-    const updated = [rental, ...rentals];
-    setRentals(updated);
-    await set('app_rentals', updated);
-    await addNotification(rental.ownerId, NotificationType.RENTAL_REQUEST, 'Novo Aluguel!', `Pedido para: ${rental.itemTitle}`, '/dashboard');
-  };
-
-  const updateRentalStatus = async (id: string, status: RentalStatus) => {
-    const updated = rentals.map(r => r.id === id ? { ...r, status } : r);
-    setRentals(updated);
-    await set('app_rentals', updated);
-    const r = rentals.find(rent => rent.id === id);
-    if (r) await addNotification(r.renterId, NotificationType.RENTAL_UPDATE, 'Status Alterado', `Seu aluguel está: ${status}`, '/dashboard');
-  };
-
-  const submitReview = async (reviewData: Omit<Review, 'id' | 'date' | 'isHidden'>) => {
-    await simulateNetwork();
-    const newReview: Review = { ...reviewData, id: 'rev_' + Date.now(), date: new Date().toISOString(), isHidden: false };
-    const updated = [...reviews, newReview];
-    setReviews(updated);
-    await set('app_reviews', updated);
-  };
-
-  const sendMessage = async (senderId: string, receiverId: string, content: string) => {
-    const newMessage: Message = { id: 'msg_' + Date.now(), senderId, receiverId, content, timestamp: new Date().toISOString(), read: false };
-    const updated = [...messages, newMessage];
-    setMessages(updated);
-    await set('app_messages', updated);
-  };
-
-  const markAsRead = async (messageId: string) => {
-    const updated = messages.map(m => m.id === messageId ? { ...m, read: true } : m);
-    setMessages(updated);
-    await set('app_messages', updated);
-  };
-
-  const deleteConversation = async (userId: string, partnerId: string) => {
-    const updated = messages.filter(m => !((m.senderId === userId && m.receiverId === partnerId) || (m.senderId === partnerId && m.receiverId === userId)));
-    setMessages(updated);
-    await set('app_messages', updated);
-  };
-
-  const deleteMessage = async (messageId: string) => {
-    const updated = messages.filter(m => m.id !== messageId);
-    setMessages(updated);
-    await set('app_messages', updated);
-  };
-
-  const clearAllMessages = async (userId: string) => {
-    const updated = messages.filter(m => m.senderId !== userId && m.receiverId !== userId);
-    setMessages(updated);
-    await set('app_messages', updated);
-  };
-
-  const deleteUserData = async (userId: string) => {
-    const updatedItems = items.filter(i => i.ownerId !== userId);
-    setItems(updatedItems);
-    await set('app_items', updatedItems);
-
-    const updatedRentals = rentals.filter(r => r.renterId !== userId && r.ownerId !== userId);
-    setRentals(updatedRentals);
-    await set('app_rentals', updatedRentals);
-
-    const updatedNotifs = notifications.filter(n => n.userId !== userId);
-    setNotifications(updatedNotifs);
-    await set('app_notifications', updatedNotifs);
-  };
-
-  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * (Math.PI / 180);
-    const dLon = (lon2 - lon1) * (Math.PI / 180);
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
-  };
-
-  const checkItemAvailability = (itemId: string, start: string, end: string) => {
-    const s = new Date(start);
-    const e = new Date(end);
-    return !rentals.some(r => r.itemId === itemId && [RentalStatus.CONFIRMED, RentalStatus.ACTIVE].includes(r.status) && s <= new Date(r.endDate) && e >= new Date(r.startDate));
-  };
-
-  return (
-    <DataContext.Provider value={{ 
-      items, rentals, reviews, messages, notifications, logs, isLoading, userLocation,
-      setUserLocation: (c) => { setUserLocationState(c); if(c) sessionStorage.setItem('user_coords', JSON.stringify(c)); },
-      addItem, removeItem, updateItem, addRental, updateRentalStatus, submitReview, 
-      sendMessage, markAsRead, deleteConversation, deleteMessage, clearAllMessages, deleteUserData,
-      getItemById: (id) => items.find(i => i.id === id),
-      getRentalsByUserId: (u) => rentals.filter(r => r.renterId === u),
-      getRentalsByOwnerId: (o) => rentals.filter(r => r.ownerId === o),
-      getReviewByTransaction: (t, r) => reviews.find(rev => rev.transactionId === t && rev.reviewerId === r),
-      searchItems: (q, cat, city) => items.filter(i => i.available && i.title.toLowerCase().includes(q.toLowerCase()) && (!cat || i.category === cat) && (!city || i.city.toLowerCase().includes(city.toLowerCase()))),
-      calculateDistance, addNotification, markNotificationAsRead, clearNotifications, checkItemAvailability, addLog, clearLogs
-    }}>
-      {children}
-    </DataContext.Provider>
-  );
 };

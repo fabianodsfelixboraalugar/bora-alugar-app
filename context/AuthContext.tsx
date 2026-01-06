@@ -1,209 +1,284 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { get, set } from 'idb-keyval';
+import { supabase } from '../lib/supabase';
 import { User, AuthState, UserPlan, VerificationStatus, UserType, UserRole } from '../types';
 
 interface AuthContextType extends AuthState {
   isLoading: boolean;
+  allUsers: User[];
   login: (email: string, password?: string) => Promise<boolean>;
-  register: (user: any) => Promise<void>;
+  register: (userData: any) => Promise<void>;
   logout: () => void;
   updateUser: (data: Partial<User>) => Promise<void>;
+  getAllUsers: () => Promise<User[]>;
   getUserById: (id: string) => User | undefined;
-  getAllUsers: () => User[];
+  getPendingUsers: () => User[];
+  adminUpdateUser: (userId: string, data: Partial<User>) => Promise<void>;
+  cancelarAssinatura: () => Promise<void>;
+  confirmarPagamento: (valor: number) => Promise<void>;
+  submitKYC: (documentUrl: string, selfieUrl: string) => Promise<void>;
+  deleteUser: (userId: string) => Promise<void>;
   adminApproveKYC: (userId: string) => Promise<void>;
   adminRejectKYC: (userId: string) => Promise<void>;
-  confirmarPagamento: (valor: number) => Promise<void>;
-  cancelarAssinatura: () => Promise<void>;
-  submitKYC: (doc: string, selfie: string) => Promise<void>;
-  deleteUser: (userId: string) => Promise<void>;
-  toggleUserStatus: (userId: string) => Promise<void>;
-  getPendingUsers: () => User[];
-  isValidTaxId: (taxId: string, type: UserType) => boolean;
-  adminUpdateUser: (userId: string, data: Partial<User>) => Promise<void>;
   createCollaborator: (data: any) => Promise<void>;
+  toggleUserStatus: (userId: string) => Promise<void>;
+  isValidTaxId: (taxId: string, type: UserType) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [auth, setAuth] = useState<AuthState>({ user: null, isAuthenticated: false });
-  const [usersRegistry, setUsersRegistry] = useState<User[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const stored = (await get('app_users_db')) as User[] | undefined;
-        let registry: User[] = stored || [];
-        
-        setUsersRegistry(registry);
-        await set('app_users_db', registry);
+  // Helper to fetch all users for state
+  const fetchUsers = async () => {
+    const { data } = await supabase.from('profiles').select('*');
+    if (data) setAllUsers(data as User[]);
+  };
 
-        const active = localStorage.getItem('app_user');
-        if (active) {
-          const parsed = JSON.parse(active);
-          const user = registry.find(u => u.id === parsed.id && u.isActive !== false);
-          if (user) setAuth({ user, isAuthenticated: true });
+  useEffect(() => {
+    const initAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+
+        if (profile) {
+          setAuth({ user: profile as User, isAuthenticated: true });
         }
-      } finally {
-        setIsLoading(false);
       }
+      await fetchUsers();
+      setIsLoading(false);
     };
-    init();
+
+    initAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        setAuth({ user: profile as User, isAuthenticated: true });
+      } else {
+        setAuth({ user: null, isAuthenticated: false });
+      }
+      await fetchUsers();
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, password?: string): Promise<boolean> => {
     setIsLoading(true);
-    await new Promise(r => setTimeout(r, 800));
-    
     let targetEmail = email;
     const isAdminAttempt = email.startsWith('*');
-    
-    if (isAdminAttempt) {
-      targetEmail = email.substring(1);
-    }
+    if (isAdminAttempt) targetEmail = email.substring(1);
 
-    const user = usersRegistry.find(u => u.email === targetEmail && u.isActive !== false);
-    
-    if (user && user.password === password) {
-      if (isAdminAttempt) {
-         const isAuthorized = user.role === 'ADMIN' || !!user.jobTitle || user.id.startsWith('colab_');
-         if (!isAuthorized) {
-            setIsLoading(false);
-            return false;
-         }
-      }
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: targetEmail,
+      password: password || '',
+    });
 
-      setAuth({ user, isAuthenticated: true });
-      localStorage.setItem('app_user', JSON.stringify(user));
+    if (error || !data.user) {
       setIsLoading(false);
-      return true;
+      return false;
     }
-    
+
+    if (isAdminAttempt) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, jobTitle')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profile?.role !== 'ADMIN' && !profile?.jobTitle) {
+        await supabase.auth.signOut();
+        setIsLoading(false);
+        return false;
+      }
+    }
+
     setIsLoading(false);
-    return false;
+    return true;
   };
 
-  const register = async (data: any) => {
-    // Lógica de Bootstrap: Se não houver usuários, o primeiro é ADMIN.
-    const isFirstUser = usersRegistry.length === 0;
-    
-    const newUser: User = { 
-      ...data, 
-      id: 'u_' + Date.now(), 
-      joinedDate: new Date().toISOString().split('T')[0], 
-      plan: isFirstUser ? UserPlan.PREMIUM : UserPlan.FREE, 
-      role: isFirstUser ? 'ADMIN' : 'USER',
-      verificationStatus: isFirstUser ? VerificationStatus.VERIFIED : VerificationStatus.NOT_STARTED, 
-      verified: isFirstUser, 
-      isActive: true 
+  const register = async (userData: any) => {
+    const { data, error } = await supabase.auth.signUp({
+      email: userData.email,
+      password: userData.password,
+    });
+
+    if (error || !data.user) throw error;
+
+    const newUserProfile: any = {
+      id: data.user.id,
+      name: userData.name,
+      email: userData.email,
+      userType: userData.userType,
+      city: userData.city,
+      joinedDate: new Date().toISOString(),
+      plan: UserPlan.FREE,
+      role: 'USER',
+      verificationStatus: VerificationStatus.NOT_STARTED,
+      isActive: true,
+      trustStats: {
+        score: 50,
+        level: 'NEUTRAL',
+        completedTransactions: 0,
+        cancellations: 0,
+        avgRatingAsOwner: 0,
+        countRatingAsOwner: 0,
+        avgRatingAsRenter: 0,
+        countRatingAsRenter: 0
+      }
     };
-    
-    const updated = [...usersRegistry, newUser];
-    setUsersRegistry(updated);
-    await set('app_users_db', updated);
-    setAuth({ user: newUser, isAuthenticated: true });
-    localStorage.setItem('app_user', JSON.stringify(newUser));
+
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert([newUserProfile]);
+
+    if (profileError) throw profileError;
+    await fetchUsers();
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setAuth({ user: null, isAuthenticated: false });
-    localStorage.removeItem('app_user');
   };
 
   const updateUser = async (data: Partial<User>) => {
     if (!auth.user) return;
-    const updatedUser = { ...auth.user, ...data };
-    const updatedRegistry = usersRegistry.map(u => u.id === auth.user!.id ? updatedUser : u);
-    setUsersRegistry(updatedRegistry);
-    await set('app_users_db', updatedRegistry);
-    setAuth({ ...auth, user: updatedUser });
-    localStorage.setItem('app_user', JSON.stringify(updatedUser));
-  };
+    const { error } = await supabase
+      .from('profiles')
+      .update(data)
+      .eq('id', auth.user.id);
 
-  const adminApproveKYC = async (userId: string) => {
-    const updated = usersRegistry.map(u => u.id === userId ? { ...u, verified: true, verificationStatus: VerificationStatus.VERIFIED } : u);
-    setUsersRegistry(updated);
-    await set('app_users_db', updated);
-  };
-
-  const adminRejectKYC = async (userId: string) => {
-    const updated = usersRegistry.map(u => u.id === userId ? { ...u, verificationStatus: VerificationStatus.REJECTED } : u);
-    setUsersRegistry(updated);
-    await set('app_users_db', updated);
-  };
-
-  const confirmarPagamento = async (valor: number) => {
-    await updateUser({ plan: valor > 10 ? UserPlan.PREMIUM : UserPlan.BASIC });
-  };
-
-  const cancelarAssinatura = async () => {
-    await updateUser({ plan: UserPlan.FREE });
-  };
-
-  const submitKYC = async (doc: string, selfie: string) => {
-    await updateUser({ verificationStatus: VerificationStatus.PENDING, documentUrl: doc, selfieUrl: selfie });
-  };
-
-  const deleteUser = async (id: string) => {
-    const updated = usersRegistry.filter(u => u.id !== id);
-    setUsersRegistry(updated);
-    await set('app_users_db', updated);
-    if (auth.user?.id === id) logout();
-  };
-
-  const toggleUserStatus = async (id: string) => {
-    const updated = usersRegistry.map(u => u.id === id ? { ...u, isActive: !u.isActive } : u);
-    setUsersRegistry(updated);
-    await set('app_users_db', updated);
-    if (auth.user?.id === id) {
-        const u = updated.find(x => x.id === id);
-        if (u && !u.isActive) logout();
+    if (!error) {
+      setAuth({ ...auth, user: { ...auth.user, ...data } });
+      await fetchUsers();
     }
   };
 
-  const getPendingUsers = () => usersRegistry.filter(u => u.verificationStatus === VerificationStatus.PENDING);
+  const getAllUsers = async (): Promise<User[]> => {
+    const { data } = await supabase.from('profiles').select('*');
+    return (data as User[]) || [];
+  };
+
+  const getUserById = (id: string) => allUsers.find(u => u.id === id);
+
+  const getPendingUsers = () => allUsers.filter(u => u.verificationStatus === VerificationStatus.PENDING);
+
+  const adminUpdateUser = async (userId: string, data: Partial<User>) => {
+    await supabase.from('profiles').update(data).eq('id', userId);
+    await fetchUsers();
+  };
+
+  const cancelarAssinatura = async () => {
+    await updateUser({ plan: UserPlan.FREE, planAutoRenew: false });
+  };
+
+  const confirmarPagamento = async (valor: number) => {
+    const newPlan = valor > 10 ? UserPlan.PREMIUM : UserPlan.BASIC;
+    await updateUser({ plan: newPlan, planAutoRenew: true });
+  };
+
+  const submitKYC = async (documentUrl: string, selfieUrl: string) => {
+    await updateUser({ 
+      documentUrl, 
+      selfieUrl, 
+      verificationStatus: VerificationStatus.PENDING 
+    });
+  };
+
+  const deleteUser = async (userId: string) => {
+    // In a real Supabase setup, you'd call a RPC or Edge Function to delete from auth.users
+    // For this mock/frontend-centric logic, we delete the profile
+    await supabase.from('profiles').delete().eq('id', userId);
+    await fetchUsers();
+  };
+
+  const adminApproveKYC = async (userId: string) => {
+    await adminUpdateUser(userId, { 
+      verificationStatus: VerificationStatus.VERIFIED, 
+      verified: true,
+      trustStats: { ...getUserById(userId)?.trustStats!, score: 75 } as any
+    });
+  };
+
+  const adminRejectKYC = async (userId: string) => {
+    await adminUpdateUser(userId, { verificationStatus: VerificationStatus.REJECTED, verified: false });
+  };
+
+  const createCollaborator = async (userData: any) => {
+    // Logic similar to register but specifically for staff/admin
+    const { data, error } = await supabase.auth.signUp({
+      email: userData.email,
+      password: userData.password,
+    });
+
+    if (error || !data.user) throw error;
+
+    const newUserProfile: any = {
+      id: data.user.id,
+      name: userData.name,
+      email: userData.email,
+      role: userData.role || 'USER',
+      jobTitle: userData.jobTitle,
+      avatar: userData.avatar,
+      userType: UserType.PF,
+      joinedDate: new Date().toISOString(),
+      plan: UserPlan.PREMIUM,
+      isActive: true,
+      verified: true,
+      verificationStatus: VerificationStatus.VERIFIED
+    };
+
+    await supabase.from('profiles').insert([newUserProfile]);
+    await fetchUsers();
+  };
+
+  const toggleUserStatus = async (userId: string) => {
+    const target = getUserById(userId);
+    if (!target) return;
+    await adminUpdateUser(userId, { isActive: !target.isActive });
+  };
 
   const isValidTaxId = (taxId: string, type: UserType): boolean => {
     const clean = taxId.replace(/\D/g, '');
     return type === UserType.PF ? clean.length === 11 : clean.length === 14;
   };
 
-  const adminUpdateUser = async (userId: string, data: Partial<User>) => {
-    const updatedRegistry = usersRegistry.map(u => u.id === userId ? { ...u, ...data } : u);
-    setUsersRegistry(updatedRegistry);
-    await set('app_users_db', updatedRegistry);
-    if (auth.user?.id === userId) {
-        const updatedUser = { ...auth.user, ...data };
-        setAuth({ ...auth, user: updatedUser });
-        localStorage.setItem('app_user', JSON.stringify(updatedUser));
-    }
-  };
-
-  const createCollaborator = async (data: any) => {
-    const newColab: User = { 
-        ...data, 
-        id: 'colab_' + Date.now(), 
-        joinedDate: new Date().toISOString().split('T')[0], 
-        plan: UserPlan.PREMIUM, 
-        verificationStatus: VerificationStatus.VERIFIED, 
-        verified: true, 
-        isActive: true,
-        userType: UserType.PF
-    };
-    const updated = [...usersRegistry, newColab];
-    setUsersRegistry(updated);
-    await set('app_users_db', updated);
-  };
-
   return (
     <AuthContext.Provider value={{ 
-      ...auth, isLoading, login, register, logout, updateUser, adminApproveKYC, adminRejectKYC,
-      getUserById: (id) => usersRegistry.find(u => u.id === id),
-      getAllUsers: () => usersRegistry,
-      confirmarPagamento, cancelarAssinatura, submitKYC, deleteUser, toggleUserStatus,
-      getPendingUsers, isValidTaxId, adminUpdateUser, createCollaborator
+      ...auth, 
+      allUsers,
+      isLoading, 
+      login, 
+      register, 
+      logout, 
+      updateUser, 
+      getAllUsers, 
+      getUserById,
+      getPendingUsers,
+      adminUpdateUser,
+      cancelarAssinatura,
+      confirmarPagamento,
+      submitKYC,
+      deleteUser,
+      adminApproveKYC,
+      adminRejectKYC,
+      createCollaborator,
+      toggleUserStatus,
+      isValidTaxId
     }}>
       {children}
     </AuthContext.Provider>

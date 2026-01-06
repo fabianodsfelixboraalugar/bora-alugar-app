@@ -8,7 +8,7 @@ import { TrustBadge } from '../components/TrustBadge';
 import { BackButton } from '../components/BackButton';
 
 export const AdminDashboard: React.FC = () => {
-  const { user, getAllUsers, deleteUser, adminApproveKYC, adminRejectKYC, adminUpdateUser, createCollaborator, toggleUserStatus } = useAuth();
+  const { user, allUsers, deleteUser, adminApproveKYC, adminRejectKYC, adminUpdateUser, createCollaborator, toggleUserStatus } = useAuth();
   const { items, rentals, logs, clearLogs, removeItem, updateItem, deleteUserData } = useData();
   const navigate = useNavigate();
   
@@ -42,8 +42,6 @@ export const AdminDashboard: React.FC = () => {
 
   if (!hasFullAccess) return null;
 
-  const allUsers = getAllUsers();
-  
   // --- CORE INTELLIGENCE ENGINE (BI) ---
   const bi = useMemo(() => {
     const now = new Date();

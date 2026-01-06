@@ -87,20 +87,24 @@ export const Login: React.FC = () => {
     }
   };
 
-  const handleRecoverPassword = (e?: React.FormEvent) => {
+  const handleRecoverPassword = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setRecoveryStatus('loading');
     
-    const allUsers = getAllUsers();
-    const userExists = allUsers.find(u => u.email === (recoveryEmail || email));
+    try {
+      const allUsers = await getAllUsers();
+      const userExists = allUsers.find(u => u.email === (recoveryEmail || email));
 
-    setTimeout(() => {
-      if (userExists) {
-        setRecoveryStatus('success');
-      } else {
-        setRecoveryStatus('error');
-      }
-    }, 1500);
+      setTimeout(() => {
+        if (userExists) {
+          setRecoveryStatus('success');
+        } else {
+          setRecoveryStatus('error');
+        }
+      }, 1500);
+    } catch (err) {
+      setRecoveryStatus('error');
+    }
   };
 
   const openRecovery = () => {
@@ -141,7 +145,7 @@ export const Login: React.FC = () => {
                   </div>
                   <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Recuperar Senha</h3>
                 </div>
-                <form onSubmit={handleRecoverPassword} className="space-y-4">
+                <form onSubmit={(e) => handleRecoverPassword(e)} className="space-y-4">
                   <input 
                     type="email" required
                     className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-500 outline-none"
