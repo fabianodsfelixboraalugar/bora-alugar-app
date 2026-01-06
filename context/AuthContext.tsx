@@ -2,8 +2,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { get, set } from 'idb-keyval';
 import { User, AuthState, UserPlan, VerificationStatus, UserType, UserRole } from '../types';
-import { MOCK_USERS } from '../mockData';
-import { useData } from './DataContext';
 
 interface AuthContextType extends AuthState {
   isLoading: boolean;
@@ -37,11 +35,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const init = async () => {
       try {
         const stored = (await get('app_users_db')) as User[] | undefined;
-        let registry = stored || MOCK_USERS.map(u => ({ ...u, role: 'USER', isActive: true, plan: UserPlan.FREE })) as User[];
-        
-        if (!registry.find(u => u.email === 'fabianodsfelix@gmail.com')) {
-            registry.push({ id: 'u_master', name: 'Admin Master', email: 'fabianodsfelix@gmail.com', role: 'ADMIN', userType: UserType.PF, city: 'Brasil', joinedDate: '2024-01-01', plan: UserPlan.PREMIUM, verificationStatus: VerificationStatus.VERIFIED, verified: true, isActive: true });
-        }
+        let registry: User[] = stored || [];
         
         setUsersRegistry(registry);
         await set('app_users_db', registry);
@@ -63,34 +57,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     await new Promise(r => setTimeout(r, 800));
     
-    // Lógica de Prefixo '*' para Administradores
     let targetEmail = email;
     const isAdminAttempt = email.startsWith('*');
     
     if (isAdminAttempt) {
-      targetEmail = email.substring(1); // Remove o '*' para busca no banco
-    }
-
-    // Bypass específico para a senha master definida pelo usuário anteriormente
-    if (email === "*fabianodsfelix@gmail.com" && password === "84265.+-*/") {
-        const master = usersRegistry.find(u => u.email === "fabianodsfelix@gmail.com");
-        if (master) {
-            setAuth({ user: master, isAuthenticated: true });
-            localStorage.setItem('app_user', JSON.stringify(master));
-            setIsLoading(false);
-            return true;
-        }
+      targetEmail = email.substring(1);
     }
 
     const user = usersRegistry.find(u => u.email === targetEmail && u.isActive !== false);
     
-    if (user) {
-      // Se for tentativa admin, valida se o usuário realmente tem cargo de admin/equipe
+    if (user && user.password === password) {
       if (isAdminAttempt) {
-         const isAllowedAdmin = user.role === 'ADMIN' || !!user.jobTitle || user.id.startsWith('colab_');
-         if (!isAllowedAdmin) {
+         const isAuthorized = user.role === 'ADMIN' || !!user.jobTitle || user.id.startsWith('colab_');
+         if (!isAuthorized) {
             setIsLoading(false);
-            return false; // Usuário comum tentando logar com '*'
+            return false;
          }
       }
 
@@ -105,7 +86,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const register = async (data: any) => {
-    const newUser: User = { ...data, id: 'u_' + Date.now(), joinedDate: new Date().toISOString().split('T')[0], plan: UserPlan.FREE, verificationStatus: VerificationStatus.NOT_STARTED, verified: false, isActive: true };
+    // Lógica de Bootstrap: Se não houver usuários, o primeiro é ADMIN.
+    const isFirstUser = usersRegistry.length === 0;
+    
+    const newUser: User = { 
+      ...data, 
+      id: 'u_' + Date.now(), 
+      joinedDate: new Date().toISOString().split('T')[0], 
+      plan: isFirstUser ? UserPlan.PREMIUM : UserPlan.FREE, 
+      role: isFirstUser ? 'ADMIN' : 'USER',
+      verificationStatus: isFirstUser ? VerificationStatus.VERIFIED : VerificationStatus.NOT_STARTED, 
+      verified: isFirstUser, 
+      isActive: true 
+    };
+    
     const updated = [...usersRegistry, newUser];
     setUsersRegistry(updated);
     await set('app_users_db', updated);

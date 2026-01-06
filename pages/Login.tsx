@@ -4,8 +4,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { BackButton } from '../components/BackButton';
 
-type LoginTab = 'ALUGADOR' | 'LOCATARIO';
-
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,7 +15,6 @@ export const Login: React.FC = () => {
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [recoveryStatus, setRecoveryStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [activeTab, setActiveTab] = useState<LoginTab>('LOCATARIO');
   
   const { login, getAllUsers } = useAuth();
   const navigate = useNavigate();
@@ -26,21 +23,6 @@ export const Login: React.FC = () => {
   const [emailSuggestions, setEmailSuggestions] = useState<string[]>([]);
   const emailInputRef = useRef<HTMLDivElement>(null);
   const commonDomains = ['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'icloud.com'];
-
-  const handleTabChange = (tab: LoginTab) => {
-    setActiveTab(tab);
-    setLoginError(false);
-    setCustomError('');
-    
-    if (tab === 'ALUGADOR') {
-      setEmail('joao.alugador@teste.com');
-      setPassword('123');
-    } else if (tab === 'LOCATARIO') {
-      setEmail('maria.locataria@teste.com');
-      setPassword('123');
-    }
-    setAcceptedTerms(true);
-  };
 
   useEffect(() => {
     const savedEmail = localStorage.getItem('saved_email');
@@ -147,14 +129,9 @@ export const Login: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2">E-mail Enviado!</h3>
-                  <p className="text-sm text-gray-500 font-medium">Instruções de recuperação foram enviadas para <span className="text-brand-600 font-bold">{recoveryEmail || email}</span>. Verifique sua caixa de entrada e spam.</p>
+                  <p className="text-sm text-gray-500 font-medium">Instruções de recuperação foram enviadas para <span className="text-brand-600 font-bold">{recoveryEmail || email}</span>.</p>
                 </div>
-                <button 
-                  onClick={() => setShowRecoveryModal(false)}
-                  className="w-full bg-brand-500 hover:bg-brand-600 text-white font-black py-4 rounded-2xl shadow-lg transition transform active:scale-95 uppercase text-xs tracking-widest"
-                >
-                  Voltar ao Login
-                </button>
+                <button onClick={() => setShowRecoveryModal(false)} className="w-full bg-brand-500 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest">Voltar</button>
               </div>
             ) : (
               <div className="space-y-6">
@@ -163,37 +140,17 @@ export const Login: React.FC = () => {
                     <i className="fas fa-key text-brand-600 text-2xl"></i>
                   </div>
                   <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Recuperar Senha</h3>
-                  <p className="text-xs text-gray-500 font-medium mt-1">Informe seu e-mail cadastrado para receber um link de redefinição.</p>
                 </div>
-
                 <form onSubmit={handleRecoverPassword} className="space-y-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5 ml-1">Seu E-mail</label>
-                    <input 
-                      type="email" 
-                      required
-                      className={`w-full px-4 py-3 rounded-xl border ${recoveryStatus === 'error' ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white'} focus:ring-2 focus:ring-brand-500 outline-none transition shadow-sm text-sm`}
-                      value={recoveryEmail}
-                      onChange={e => { setRecoveryEmail(e.target.value); setRecoveryStatus('idle'); }}
-                      placeholder="seu@email.com"
-                    />
-                    {recoveryStatus === 'error' && (
-                      <p className="text-[10px] text-red-600 font-bold mt-2 ml-1 uppercase"><i className="fas fa-times-circle mr-1"></i> E-mail não encontrado em nossa base.</p>
-                    )}
-                  </div>
-
-                  <button 
-                    type="submit"
-                    disabled={recoveryStatus === 'loading'}
-                    className="w-full bg-brand-500 hover:bg-brand-600 text-white font-black py-4 rounded-2xl shadow-lg transition transform active:scale-95 uppercase text-xs tracking-widest flex items-center justify-center gap-2"
-                  >
-                    {recoveryStatus === 'loading' ? (
-                      <>
-                        <i className="fas fa-circle-notch fa-spin"></i> Processando...
-                      </>
-                    ) : (
-                      'Enviar Link de Recuperação'
-                    )}
+                  <input 
+                    type="email" required
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-brand-500 outline-none"
+                    value={recoveryEmail}
+                    onChange={e => { setRecoveryEmail(e.target.value); setRecoveryStatus('idle'); }}
+                    placeholder="seu@email.com"
+                  />
+                  <button type="submit" disabled={recoveryStatus === 'loading'} className="w-full bg-brand-500 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest">
+                    {recoveryStatus === 'loading' ? 'Enviando...' : 'Enviar Link'}
                   </button>
                 </form>
               </div>
@@ -202,26 +159,7 @@ export const Login: React.FC = () => {
         </div>
       )}
 
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 animate-fadeIn flex flex-col">
-        
-        {/* TABS DE SELEÇÃO DE PERFIL - REMOVIDO BOTÃO MASTER CONFORME SOLICITADO */}
-        <div className="flex bg-gray-50/50 border-b border-gray-100 p-2 gap-2">
-          <button 
-            type="button"
-            onClick={() => handleTabChange('ALUGADOR')}
-            className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-tight transition-all flex items-center justify-center gap-1.5 ${activeTab === 'ALUGADOR' ? 'bg-brand-100 text-brand-700 shadow-sm border border-brand-200' : 'text-gray-400 hover:bg-gray-100'}`}
-          >
-            ALUGADOR
-          </button>
-          <button 
-            type="button"
-            onClick={() => handleTabChange('LOCATARIO')}
-            className={`flex-1 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-tight transition-all flex items-center justify-center gap-1.5 ${activeTab === 'LOCATARIO' ? 'bg-blue-100 text-blue-700 shadow-sm border border-blue-200' : 'text-gray-400 hover:bg-gray-100'}`}
-          >
-            LOCATÁRIO
-          </button>
-        </div>
-
+      <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 animate-fadeIn">
         <div className="p-8 md:p-10 flex flex-col">
           <div className="text-center mb-8">
             <h2 className="text-3xl font-black text-gray-700 uppercase tracking-tighter">ENTRAR</h2>
@@ -232,25 +170,15 @@ export const Login: React.FC = () => {
             <div className="relative" ref={emailInputRef}>
               <label className="block text-[10px] font-black text-gray-400 uppercase mb-1.5 ml-1">EMAIL</label>
               <input 
-                type="text" 
-                required
-                autoComplete="off"
-                className={`w-full px-5 py-4 rounded-2xl border ${loginError ? 'border-red-300 bg-red-50' : 'border-gray-100 bg-gray-50/30'} focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition shadow-sm font-medium text-gray-700 placeholder-gray-300`}
-                value={email}
-                onChange={handleEmailChange}
+                type="text" required autoComplete="off"
+                className={`w-full px-5 py-4 rounded-2xl border ${loginError ? 'border-red-300 bg-red-50' : 'border-gray-100 bg-gray-50/30'} focus:ring-2 focus:ring-brand-500 outline-none transition font-medium text-gray-700`}
+                value={email} onChange={handleEmailChange}
                 placeholder="seu@email.com"
               />
               {showEmailSuggestions && (
-                <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-2xl py-2 animate-fadeIn max-h-48 overflow-y-auto">
+                <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-2xl py-2 max-h-48 overflow-y-auto">
                   {emailSuggestions.map((suggestion, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-600 hover:bg-brand-50 hover:text-brand-600 transition"
-                      onClick={() => selectEmailSuggestion(suggestion)}
-                    >
-                      {suggestion}
-                    </button>
+                    <button key={idx} type="button" className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-600 hover:bg-brand-50 transition" onClick={() => selectEmailSuggestion(suggestion)}>{suggestion}</button>
                   ))}
                 </div>
               )}
@@ -260,19 +188,12 @@ export const Login: React.FC = () => {
               <label className="block text-[10px] font-black text-gray-400 uppercase mb-1.5 ml-1">SENHA</label>
               <div className="relative">
                 <input 
-                  type={showPassword ? "text" : "password"} 
-                  required
-                  className={`w-full px-5 py-4 rounded-2xl border ${loginError ? 'border-red-300 bg-red-50' : 'border-gray-100 bg-gray-50/30'} focus:ring-2 focus:ring-brand-500 focus:bg-white outline-none transition shadow-sm pr-12 font-medium text-gray-700 placeholder-gray-300`}
-                  value={password}
-                  onChange={e => { setPassword(e.target.value); if (loginError) setLoginError(false); if (customError) setCustomError(''); }}
+                  type={showPassword ? "text" : "password"} required
+                  className={`w-full px-5 py-4 rounded-2xl border ${loginError ? 'border-red-300 bg-red-50' : 'border-gray-100 bg-gray-50/30'} focus:ring-2 focus:ring-brand-500 outline-none transition pr-12 font-medium text-gray-700`}
+                  value={password} onChange={e => { setPassword(e.target.value); if (loginError) setLoginError(false); }}
                   placeholder="••••••••"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-brand-500 transition-colors"
-                  aria-label={showPassword ? "Ocultar senha" : "Visualizar senha"}
-                >
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-brand-500 transition-colors">
                   <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                 </button>
               </div>
@@ -280,58 +201,26 @@ export const Login: React.FC = () => {
 
             <div className="flex items-center justify-between px-1">
               <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  name="remember-me"
-                  type="checkbox"
-                  className="h-4 w-4 text-brand-600 focus:ring-brand-500 border-gray-300 rounded cursor-pointer"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                />
-                <label htmlFor="remember-me" className="ml-2 block text-[10px] font-black text-gray-400 cursor-pointer select-none uppercase tracking-tighter">
-                  LEMBRAR MEU EMAIL
-                </label>
+                <input id="remember-me" type="checkbox" className="h-4 w-4 text-brand-600 rounded cursor-pointer" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
+                <label htmlFor="remember-me" className="ml-2 block text-[10px] font-black text-gray-400 cursor-pointer uppercase">LEMBRAR EMAIL</label>
               </div>
-              <button 
-                type="button"
-                onClick={openRecovery}
-                className="text-[10px] font-black text-brand-300 hover:text-brand-600 uppercase tracking-tighter transition-colors"
-              >
-                ESQUECI A SENHA
-              </button>
+              <button type="button" onClick={openRecovery} className="text-[10px] font-black text-brand-300 hover:text-brand-600 uppercase transition-colors">ESQUECI A SENHA</button>
             </div>
 
             <div className="flex items-start gap-3 px-1 pt-2">
-              <input 
-                id="accept-terms-login"
-                type="checkbox" 
-                checked={acceptedTerms} 
-                onChange={e => { setAcceptedTerms(e.target.checked); if (customError) setCustomError(''); }}
-                className="mt-1 w-5 h-5 text-brand-600 border-gray-300 rounded focus:ring-brand-500 cursor-pointer"
-              />
-              <label htmlFor="accept-terms-login" className="text-[10px] text-gray-400 font-bold leading-relaxed cursor-pointer select-none">
-                Li e concordo com os <Link to="/termos" className="text-brand-500 hover:underline">Termos de Uso</Link> e a <Link to="/privacidade" className="text-brand-500 hover:underline">Política de Privacidade</Link>.
+              <input id="accept-terms-login" type="checkbox" checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} className="mt-1 w-5 h-5 text-brand-600 border-gray-300 rounded cursor-pointer" />
+              <label htmlFor="accept-terms-login" className="text-[10px] text-gray-400 font-bold leading-relaxed cursor-pointer">
+                Li e concordo com os <Link to="/termos" className="text-brand-500 underline">Termos</Link> e <Link to="/privacidade" className="text-brand-500 underline">Privacidade</Link>.
               </label>
             </div>
 
             {loginError && (
-              <div className="bg-red-50 border border-red-100 p-4 rounded-2xl animate-fadeIn space-y-2">
-                <p className="text-red-600 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
-                  <i className="fas fa-exclamation-circle text-xs"></i> Credenciais Incorretas
-                </p>
-                <p className="text-[9px] text-red-400 font-bold uppercase">Administradores devem usar o prefixo "*" antes do e-mail.</p>
+              <div className="bg-red-50 border border-red-100 p-4 rounded-2xl animate-fadeIn text-[10px] text-red-600 font-black uppercase text-center">
+                Credenciais Incorretas. Tente novamente.
               </div>
             )}
 
-            {customError && (
-              <div className="bg-red-50 border border-red-100 p-3 rounded-xl animate-fadeIn">
-                <p className="text-red-600 text-[9px] font-black uppercase tracking-tight text-center">
-                  <i className="fas fa-exclamation-triangle mr-1"></i> {customError}
-                </p>
-              </div>
-            )}
-
-            <button type="submit" className="w-full bg-[#c9e394] hover:bg-brand-500 text-white font-black py-5 rounded-2xl shadow-lg transition transform active:scale-95 uppercase tracking-widest text-sm">
+            <button type="submit" className="w-full bg-[#84cc16] hover:bg-brand-600 text-white font-black py-5 rounded-2xl shadow-lg transition transform active:scale-95 uppercase tracking-widest text-sm">
               ENTRAR NO BORA ALUGAR
             </button>
           </form>
