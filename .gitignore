@@ -1,15 +1,41 @@
-# dependências
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
 node_modules
-
-# build
 dist
+dist-ssr
+*.local
 
-# variáveis de ambiente
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Environment variables
 .env
-*.env
+.env.*
+
+# Arquivos temporários
+Novo Documento de Texto.txt
+
+# Environment
+.env
+.env.*
 supabase.env
 
-# lixo / temporários
+# lixo
 npm
 vite
 aluga-tudo-app@1.0.0
