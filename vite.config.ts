@@ -9,6 +9,9 @@ export default defineConfig({
     // Otimizações para mobile
     target: 'esnext',
     minify: 'esbuild',
+
+    // ✅ AUMENTA O LIMITE DO AVISO DE CHUNK
+    chunkSizeWarningLimit: 1200
   },
   server: {
     host: true
