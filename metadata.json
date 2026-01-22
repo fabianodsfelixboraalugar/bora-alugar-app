@@ -1,0 +1,7 @@
+{
+  "name": "Bora Alugar 08",
+  "description": "Uma plataforma completa para alugar qualquer coisa - de ferramentas a imóveis. Conecta proprietários e locatários de forma simples e segura.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

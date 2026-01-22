@@ -1,0 +1,22 @@
+
+{
+  "short_name": "BoraAlugar",
+  "name": "Bora Alugar - Alugue o que precisar",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1042/1042390.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1042/1042390.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#84cc16",
+  "background_color": "#ffffff",
+  "orientation": "portrait"
+}
