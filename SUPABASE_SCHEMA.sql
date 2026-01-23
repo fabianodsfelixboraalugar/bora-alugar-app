@@ -1,98 +1,38 @@
 
--- SCRIPT DE CRIAÇÃO DO BANCO BORA ALUGAR
--- Cole este código no SQL Editor do Supabase e clique em RUN.
+-- SCRIPT DE ATUALIZAÇÃO COMPLETA - BORA ALUGAR
+-- Copie e cole no SQL Editor do Supabase e clique em RUN
 
--- 1. Tabela de Perfis de Usuário
-CREATE TABLE IF NOT EXISTS public.profiles (
+DROP TABLE IF EXISTS public.profiles CASCADE;
+
+CREATE TABLE public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   email TEXT NOT NULL,
   userType TEXT DEFAULT 'Pessoa Física',
+  cpf TEXT,
+  cnpj TEXT,
   city TEXT,
   state TEXT,
+  address TEXT,
+  addressNumber TEXT,
+  complement TEXT,
+  neighborhood TEXT,
+  zipCode TEXT,
+  jobTitle TEXT,
+  bio TEXT,
+  avatar TEXT,
+  joinedDate TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
   plan TEXT DEFAULT 'Gratuito',
   role TEXT DEFAULT 'USER',
   verificationStatus TEXT DEFAULT 'Não Iniciado',
-  joinedDate TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
-  avatar TEXT,
   verified BOOLEAN DEFAULT FALSE,
-  trustStats JSONB DEFAULT '{"score": 50, "level": "NEUTRAL", "completedTransactions": 0}'::jsonb
+  isActive BOOLEAN DEFAULT TRUE,
+  blockedUserIds TEXT[] DEFAULT '{}',
+  trustStats JSONB DEFAULT '{"score": 50, "level": "NEUTRAL", "completedTransactions": 0, "cancellations": 0, "avgRatingAsOwner": 0, "countRatingAsOwner": 0, "avgRatingAsRenter": 0, "countRatingAsRenter": 0}'::jsonb
 );
 
--- 2. Tabela de Itens para Aluguel
-CREATE TABLE IF NOT EXISTS public.items (
-  id TEXT PRIMARY KEY,
-  ownerId UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  ownerName TEXT,
-  title TEXT NOT NULL,
-  category TEXT,
-  description TEXT,
-  images TEXT[] DEFAULT '{}',
-  videoUrl TEXT,
-  pricePerDay NUMERIC NOT NULL,
-  city TEXT,
-  state TEXT,
-  available BOOLEAN DEFAULT TRUE,
-  status TEXT DEFAULT 'Disponível',
-  deliveryConfig JSONB,
-  contractTerms TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
+-- Garante que o bucket de imagens exista (rode isso se der erro de storage)
+-- INSERT INTO storage.buckets (id, name, public) VALUES ('item-images', 'item-images', true) ON CONFLICT DO NOTHING;
 
--- 3. Tabela de Aluguéis (Transações)
-CREATE TABLE IF NOT EXISTS public.rentals (
-  id TEXT PRIMARY KEY,
-  itemId TEXT REFERENCES public.items(id) ON DELETE CASCADE,
-  itemTitle TEXT,
-  itemImage TEXT,
-  renterId UUID REFERENCES auth.users(id),
-  ownerId UUID REFERENCES auth.users(id),
-  startDate DATE,
-  endDate DATE,
-  totalPrice NUMERIC,
-  status TEXT DEFAULT 'Pendente',
-  deliveryInfo JSONB,
-  contractAccepted BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
--- 4. Tabela de Mensagens (Chat)
-CREATE TABLE IF NOT EXISTS public.messages (
-  id BIGSERIAL PRIMARY KEY,
-  senderId UUID REFERENCES auth.users(id),
-  receiverId UUID REFERENCES auth.users(id),
-  content TEXT,
-  read BOOLEAN DEFAULT FALSE,
-  timestamp TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
--- 5. Tabela de Notificações
-CREATE TABLE IF NOT EXISTS public.notifications (
-  id BIGSERIAL PRIMARY KEY,
-  userId UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  type TEXT,
-  title TEXT,
-  message TEXT,
-  link TEXT,
-  read BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
--- 6. Tabela de Avaliações
-CREATE TABLE IF NOT EXISTS public.reviews (
-  id BIGSERIAL PRIMARY KEY,
-  transactionId TEXT,
-  itemId TEXT,
-  reviewerId UUID,
-  reviewedId UUID,
-  reviewerName TEXT,
-  role TEXT,
-  rating INTEGER,
-  criteria JSONB,
-  comment TEXT,
-  tags TEXT[],
-  date TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
-);
-
--- Habilitar Realtime para as tabelas principais
-ALTER PUBLICATION supabase_realtime ADD TABLE profiles, items, rentals, messages, notifications, reviews;
+-- Habilitar Realtime para a tabela profiles
+ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles;

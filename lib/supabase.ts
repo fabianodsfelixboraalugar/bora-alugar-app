@@ -3,8 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 
 // === CONFIGURAÇÃO DO BANCO DE DADOS (SUPABASE) ===
 
-// 1. Sua URL do projeto (Ex: https://xyz.supabase.co)
-// ATENÇÃO: Verifique se não há espaços extras no final da URL.
+// 1. Sua URL do projeto (Baseado no seu log de erro)
 const supabaseUrl = 'https://udjbgazatnspnvaoyatf.supabase.co'; 
 
 // 2. Sua Chave ANON (Pegue em Settings > API > anon public no painel do Supabase)
@@ -15,7 +14,7 @@ const isDefault = (val: string) =>
   !val || 
   val.includes('SUA_CHAVE') || 
   val.includes('COLE_AQUI') ||
-  val.startsWith('sb_') || // Evita que usem chaves do Stripe
+  val.startsWith('sb_') || 
   val.length < 40;
 
 export const isSupabaseConfigured = !isDefault(supabaseUrl) && !isDefault(supabaseAnonKey);

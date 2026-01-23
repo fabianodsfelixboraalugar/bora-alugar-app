@@ -28,6 +28,7 @@ export const Register: React.FC = () => {
   const { register, isValidTaxId } = useAuth();
   const navigate = useNavigate();
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingCep, setIsLoadingCep] = useState(false);
   
   const [showEmailSuggestions, setShowEmailSuggestions] = useState(false);
@@ -62,16 +63,6 @@ export const Register: React.FC = () => {
     setFormData({ ...formData, email: suggestion });
     setShowEmailSuggestions(false);
   };
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (emailInputRef.current && !emailInputRef.current.contains(event.target as Node)) {
-        setShowEmailSuggestions(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const maskTaxId = (value: string) => {
     const clean = value.replace(/\D/g, '');
@@ -110,13 +101,26 @@ export const Register: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    
     if (!acceptedTerms) { setError("Aceite os termos para continuar."); return; }
     if (!isValidTaxId(formData.taxId, formData.userType)) { setError("Documento inválido."); return; }
-    if (!isPasswordValid) { setError("Senha fraca."); return; }
-    if (formData.password !== formData.confirmPassword) { setError("Senhas não coincidem."); return; }
+    if (!isPasswordValid) { setError("Sua senha precisa ser mais forte."); return; }
+    if (formData.password !== formData.confirmPassword) { setError("As senhas não coincidem."); return; }
 
-    await register({ ...formData });
-    navigate('/dashboard');
+    setIsSubmitting(true);
+    try {
+      await register({ ...formData });
+      navigate('/dashboard');
+    } catch (err: any) {
+      console.error(err);
+      if (err.status === 429 || err.message?.includes('429')) {
+        setError("Muitas tentativas! Por segurança, aguarde 60 segundos antes de tentar novamente.");
+      } else {
+        setError(err.message || "Erro ao criar conta. Tente novamente.");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const inputStyle = "w-full bg-white border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-brand-500 text-gray-800 transition-all";
@@ -158,13 +162,6 @@ export const Register: React.FC = () => {
                   <div className="relative" ref={emailInputRef}>
                       <label className={labelStyle}>Email</label>
                       <input type="email" required className={inputStyle} value={formData.email} onChange={handleEmailChange} autoComplete="off" />
-                      {showEmailSuggestions && (
-                        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl py-2 max-h-48 overflow-y-auto">
-                          {emailSuggestions.map((suggestion, idx) => (
-                            <button key={idx} type="button" className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 hover:bg-brand-50" onClick={() => selectEmailSuggestion(suggestion)}>{suggestion}</button>
-                          ))}
-                        </div>
-                      )}
                   </div>
               </div>
 
@@ -207,9 +204,15 @@ export const Register: React.FC = () => {
             <label htmlFor="accept-terms-register" className="text-xs text-gray-500 cursor-pointer">Li e aceito os termos.</label>
           </div>
 
-          {error && <div className="bg-red-50 p-3 rounded-xl text-red-600 text-[10px] font-black uppercase text-center">{error}</div>}
+          {error && <div className="bg-red-50 p-3 rounded-xl text-red-600 text-[10px] font-black uppercase text-center border border-red-100">{error}</div>}
 
-          <button type="submit" className="w-full bg-brand-500 hover:bg-brand-600 text-white font-black py-4 rounded-2xl shadow-lg transition uppercase tracking-widest mt-4">CADASTRAR</button>
+          <button 
+            type="submit" 
+            disabled={isSubmitting}
+            className="w-full bg-brand-500 hover:bg-brand-600 text-white font-black py-4 rounded-2xl shadow-lg transition uppercase tracking-widest mt-4 disabled:opacity-50"
+          >
+            {isSubmitting ? <i className="fas fa-spinner fa-spin mr-2"></i> : 'CADASTRAR AGORA'}
+          </button>
         </form>
       </div>
     </div>
