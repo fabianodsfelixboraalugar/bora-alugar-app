@@ -1,6 +1,7 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { Item, Rental, Review, Message, Notification, NotificationType, RentalStatus, AppLog } from '../types';
+import { Item, Rental, Review, Message, Notification, NotificationType, RentalStatus, AppLog, Category, ItemStatus } from '../types';
 
 interface DataContextType {
   items: Item[];
@@ -58,11 +59,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       const [
-        { data: itemsData, error: itemsError },
-        { data: rentalsData, error: rentalsError },
-        { data: messagesData, error: messagesError },
-        { data: notificationsData, error: notificationsError },
-        { data: reviewsData, error: reviewsError }
+        { data: itemsRaw, error: itemsError },
+        { data: rentalsRaw, error: rentalsError },
+        { data: messagesRaw, error: messagesError },
+        { data: notificationsRaw, error: notificationsError },
+        { data: reviewsRaw, error: reviewsError }
       ] = await Promise.all([
         supabase.from('items').select('*').order('created_at', { ascending: false }),
         supabase.from('rentals').select('*').order('created_at', { ascending: false }),
@@ -72,15 +73,59 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ]);
 
       if (itemsError || rentalsError || messagesError || notificationsError || reviewsError) {
-        console.warn("Alguns dados não puderam ser carregados do Supabase.");
-        // Se houver erro de rede real (DNS/Conexão), o catch abaixo pegará
+        console.warn("Alguns dados não puderam ser carregados do Supabase.", { itemsError, rentalsError });
       }
 
-      setItems((itemsData as any) || []);
-      setRentals((rentalsData as any) || []);
-      setMessages((messagesData as any) || []);
-      setNotifications((notificationsData as any) || []);
-      setReviews((reviewsData as any) || []);
+      // Mapeamento de snake_case para camelCase para o App não quebrar
+      setItems((itemsRaw?.map((i: any) => ({
+        ...i,
+        ownerId: i.owner_id,
+        ownerName: i.owner_name,
+        contractTerms: i.contract_terms,
+        videoUrl: i.video_url,
+        pricePerDay: i.price_per_day,
+        createdAt: i.created_at,
+        reviewCount: i.review_count,
+        deliveryConfig: i.delivery_config
+      })) as Item[]) || []);
+
+      setRentals((rentalsRaw?.map((r: any) => ({
+        ...r,
+        itemId: r.item_id,
+        itemTitle: r.item_title,
+        itemImage: r.item_image,
+        renterId: r.renter_id,
+        ownerId: r.owner_id,
+        startDate: r.start_date,
+        endDate: r.end_date,
+        totalPrice: r.total_price,
+        createdAt: r.created_at,
+        deliveryInfo: r.delivery_info,
+        contractAccepted: r.contract_accepted
+      })) as Rental[]) || []);
+
+      setMessages((messagesRaw?.map((m: any) => ({
+        ...m,
+        senderId: m.sender_id,
+        receiverId: m.receiver_id
+      })) as Message[]) || []);
+
+      setNotifications((notificationsRaw?.map((n: any) => ({
+        ...n,
+        userId: n.user_id,
+        createdAt: n.created_at
+      })) as Notification[]) || []);
+
+      setReviews((reviewsRaw?.map((rv: any) => ({
+        ...rv,
+        transactionId: rv.transaction_id,
+        itemId: rv.item_id,
+        reviewerId: rv.reviewer_id,
+        reviewedId: rv.reviewed_id,
+        reviewerName: rv.reviewer_name,
+        isAnonymous: rv.is_anonymous
+      })) as Review[]) || []);
+
       setNetworkError(false);
     } catch (error: any) {
       console.error("Erro fatal na conexão com Supabase:", error);
@@ -132,12 +177,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    const { error } = await supabase.from('items').insert([{
-      ...itemData,
+    const dbItem = {
+      id: itemData.id,
+      owner_id: itemData.ownerId,
+      owner_name: itemData.ownerName,
+      title: itemData.title,
+      category: itemData.category,
+      description: itemData.description,
+      contract_terms: itemData.contractTerms,
       images: uploadedImages,
-      pricePerDay: itemData.pricePerDay 
-    }]);
+      video_url: itemData.videoUrl,
+      price_per_day: itemData.pricePerDay,
+      city: itemData.city,
+      state: itemData.state,
+      available: true,
+      status: 'Disponível',
+      delivery_config: itemData.deliveryConfig
+    };
 
+    const { error } = await supabase.from('items').insert([dbItem]);
     if (error) throw error;
     await fetchData();
   };
@@ -148,14 +206,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateItem = async (itemId: string, data: Partial<Item>) => {
-    await supabase.from('items').update(data).eq('id', itemId);
+    const dbData: any = {};
+    if (data.title) dbData.title = data.title;
+    if (data.available !== undefined) dbData.available = data.available;
+    if (data.status) dbData.status = data.status;
+    if (data.pricePerDay) dbData.price_per_day = data.pricePerDay;
+
+    await supabase.from('items').update(dbData).eq('id', itemId);
     await fetchData();
   };
 
   const getItemById = (id: string) => items.find(i => i.id === id);
 
   const addRental = async (rentalData: any) => {
-    const { error } = await supabase.from('rentals').insert([rentalData]);
+    const dbRental = {
+      id: rentalData.id,
+      item_id: rentalData.itemId,
+      item_title: rentalData.itemTitle,
+      item_image: rentalData.itemImage,
+      renter_id: rentalData.renterId,
+      owner_id: rentalData.ownerId,
+      start_date: rentalData.startDate,
+      end_date: rentalData.endDate,
+      total_price: rentalData.totalPrice,
+      status: rentalData.status,
+      delivery_info: rentalData.deliveryInfo,
+      contract_accepted: rentalData.contractAccepted
+    };
+
+    const { error } = await supabase.from('rentals').insert([dbRental]);
     if (error) throw error;
     await addNotification(rentalData.ownerId, NotificationType.RENTAL_REQUEST, 'Novo Aluguel!', `Pedido para: ${rentalData.itemTitle}`, '/dashboard');
     await fetchData();
@@ -181,7 +260,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const sendMessage = async (senderId: string, receiverId: string, content: string) => {
-    await supabase.from('messages').insert([{ senderId, receiverId, content, read: false }]);
+    await supabase.from('messages').insert([{ 
+      sender_id: senderId, 
+      receiver_id: receiverId, 
+      content, 
+      read: false 
+    }]);
     await fetchData();
   };
 
@@ -197,17 +281,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteConversation = async (userId: string, partnerId: string) => {
     await supabase.from('messages').delete()
-      .or(`and(senderId.eq.${userId},receiverId.eq.${partnerId}),and(senderId.eq.${partnerId},receiverId.eq.${userId})`);
+      .or(`and(sender_id.eq.${userId},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${userId})`);
     await fetchData();
   };
 
   const clearAllMessages = async (userId: string) => {
-    await supabase.from('messages').delete().or(`senderId.eq.${userId},receiverId.eq.${userId}`);
+    await supabase.from('messages').delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
     await fetchData();
   };
 
   const addNotification = async (userId: string, type: NotificationType, title: string, message: string, link: string) => {
-    await supabase.from('notifications').insert([{ userId, type, title, message, link, read: false }]);
+    await supabase.from('notifications').insert([{ 
+      user_id: userId, 
+      type, 
+      title, 
+      message, 
+      link, 
+      read: false 
+    }]);
     await fetchData();
   };
 
@@ -217,12 +308,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const clearNotifications = async (userId: string) => {
-    await supabase.from('notifications').delete().eq('userId', userId);
+    await supabase.from('notifications').delete().eq('user_id', userId);
     await fetchData();
   };
 
   const submitReview = async (review: any) => {
-    await supabase.from('reviews').insert([review]);
+    const dbReview = {
+      id: review.id || 'rev_' + Date.now(),
+      transaction_id: review.transactionId,
+      item_id: review.itemId,
+      reviewer_id: review.reviewerId,
+      reviewed_id: review.reviewedId,
+      reviewer_name: review.reviewerName,
+      role: review.role,
+      rating: review.rating,
+      comment: review.comment,
+      is_anonymous: review.isAnonymous,
+      criteria: review.criteria,
+      tags: review.tags
+    };
+    await supabase.from('reviews').insert([dbReview]);
     await fetchData();
   };
 
@@ -242,11 +347,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteUserData = async (userId: string) => {
     await Promise.all([
-      supabase.from('items').delete().eq('ownerId', userId),
-      supabase.from('rentals').delete().or(`renterId.eq.${userId},ownerId.eq.${userId}`),
-      // Fixed: partnerId was undefined here, replaced with userId
-      supabase.from('messages').delete().or(`senderId.eq.${userId},receiverId.eq.${userId}`),
-      supabase.from('notifications').delete().eq('userId', userId)
+      supabase.from('items').delete().eq('owner_id', userId),
+      supabase.from('rentals').delete().or(`renter_id.eq.${userId},owner_id.eq.${userId}`),
+      supabase.from('messages').delete().or(`sender_id.eq.${userId},receiver_id.eq.${userId}`),
+      supabase.from('notifications').delete().eq('user_id', userId)
     ]);
     await fetchData();
   };
