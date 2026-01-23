@@ -46,10 +46,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUsers = async () => {
     try {
-      // Destructure status from the response as PostgrestError does not contain HTTP status
       const { data, error, status } = await supabase.from('profiles').select('*');
       if (error) {
-        // Silencia erros comuns de desenvolvimento/sessão
         if (error.code === 'PGRST301' || status === 401) return;
         throw error;
       }
@@ -65,7 +63,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
-          // Se o token estiver corrompido, limpa a sessão local
           if (sessionError.status === 401 || sessionError.status === 400) {
             await supabase.auth.signOut();
           }
@@ -138,7 +135,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw authError;
     }
     
-    // Perfil criado via Trigger no SQL (SUPABASE_SCHEMA.sql)
     await fetchUsers();
   };
 

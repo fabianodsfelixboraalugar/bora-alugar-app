@@ -31,10 +31,23 @@ export const Register: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingCep, setIsLoadingCep] = useState(false);
   
+  // Timer para o erro 429
+  const [retryTimer, setRetryTimer] = useState(0);
+  
   const [showEmailSuggestions, setShowEmailSuggestions] = useState(false);
   const [emailSuggestions, setEmailSuggestions] = useState<string[]>([]);
   const emailInputRef = useRef<HTMLDivElement>(null);
   const commonDomains = ['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'icloud.com'];
+
+  useEffect(() => {
+    let interval: any;
+    if (retryTimer > 0) {
+      interval = setInterval(() => {
+        setRetryTimer((prev) => prev - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [retryTimer]);
 
   const passwordCriteria = useMemo(() => ({
     length: formData.password.length >= 8,
@@ -100,6 +113,7 @@ export const Register: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (retryTimer > 0) return;
     setError('');
     
     if (!acceptedTerms) { setError("Aceite os termos para continuar."); return; }
@@ -110,14 +124,14 @@ export const Register: React.FC = () => {
     setIsSubmitting(true);
     try {
       await register({ ...formData });
-      // Se não houver erro, o Supabase enviará um e-mail de confirmação (se ativado)
       alert("Conta criada com sucesso! Verifique seu e-mail para confirmar o cadastro antes de fazer login.");
       navigate('/login');
     } catch (err: any) {
       console.error("Erro no Registro:", err);
       // Tratamento específico para o erro 429 (Muitas tentativas)
-      if (err.message?.includes('429') || err.status === 429) {
-        setError("⚠️ LIMITE DE SEGURANÇA: Muitas tentativas de cadastro seguidas. O Supabase bloqueou seu IP por 1 minuto. Por favor, aguarde e tente novamente.");
+      if (err.message?.includes('429') || err.status === 429 || err.message?.includes('Muitas tentativas')) {
+        setError("⚠️ LIMITE ATINGIDO: Muitas tentativas. O Supabase bloqueou novos cadastros temporariamente. Por favor, aguarde o contador abaixo.");
+        setRetryTimer(60); // Bloqueia por 60 segundos
       } else if (err.message?.includes('User already registered')) {
         setError("Este e-mail já está cadastrado. Tente fazer login.");
       } else {
@@ -230,10 +244,10 @@ export const Register: React.FC = () => {
 
           <button 
             type="submit" 
-            disabled={isSubmitting}
-            className="w-full bg-brand-500 hover:bg-brand-600 text-white font-black py-4 rounded-2xl shadow-lg transition uppercase tracking-widest mt-4 disabled:opacity-50"
+            disabled={isSubmitting || retryTimer > 0}
+            className={`w-full text-white font-black py-4 rounded-2xl shadow-lg transition uppercase tracking-widest mt-4 ${retryTimer > 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-brand-500 hover:bg-brand-600'}`}
           >
-            {isSubmitting ? <i className="fas fa-spinner fa-spin mr-2"></i> : 'CADASTRAR AGORA'}
+            {retryTimer > 0 ? `AGUARDE ${retryTimer}s` : (isSubmitting ? <i className="fas fa-spinner fa-spin mr-2"></i> : 'CADASTRAR AGORA')}
           </button>
         </form>
       </div>
