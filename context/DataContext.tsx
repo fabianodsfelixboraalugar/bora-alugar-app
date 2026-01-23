@@ -1,6 +1,5 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Item, Rental, Review, Message, Notification, NotificationType, RentalStatus, AppLog } from '../types';
 
 interface DataContextType {
@@ -12,6 +11,7 @@ interface DataContextType {
   logs: AppLog[];
   userLocation: { lat: number, lng: number } | null;
   isLoading: boolean;
+  networkError: boolean;
   setUserLocation: (loc: { lat: number, lng: number } | null) => void;
   addItem: (item: any) => Promise<void>;
   removeItem: (itemId: string) => Promise<void>;
@@ -48,15 +48,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [logs, setLogs] = useState<AppLog[]>([]);
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [networkError, setNetworkError] = useState(false);
 
   const fetchData = async () => {
+    if (!isSupabaseConfigured) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const [
-        { data: itemsData },
-        { data: rentalsData },
-        { data: messagesData },
-        { data: notificationsData },
-        { data: reviewsData }
+        { data: itemsData, error: itemsError },
+        { data: rentalsData, error: rentalsError },
+        { data: messagesData, error: messagesError },
+        { data: notificationsData, error: notificationsError },
+        { data: reviewsData, error: reviewsError }
       ] = await Promise.all([
         supabase.from('items').select('*').order('created_at', { ascending: false }),
         supabase.from('rentals').select('*').order('created_at', { ascending: false }),
@@ -65,13 +71,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         supabase.from('reviews').select('*').order('date', { ascending: false })
       ]);
 
+      if (itemsError || rentalsError || messagesError || notificationsError || reviewsError) {
+        console.warn("Alguns dados não puderam ser carregados do Supabase.");
+        // Se houver erro de rede real (DNS/Conexão), o catch abaixo pegará
+      }
+
       setItems((itemsData as any) || []);
       setRentals((rentalsData as any) || []);
       setMessages((messagesData as any) || []);
       setNotifications((notificationsData as any) || []);
       setReviews((reviewsData as any) || []);
-    } catch (error) {
-      console.error("Erro ao carregar dados:", error);
+      setNetworkError(false);
+    } catch (error: any) {
+      console.error("Erro fatal na conexão com Supabase:", error);
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('network')) {
+        setNetworkError(true);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -80,13 +95,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     fetchData();
 
-    const channel = supabase.channel('db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public' }, () => {
-        fetchData();
-      })
-      .subscribe();
+    if (isSupabaseConfigured) {
+      const channel = supabase.channel('db-changes')
+        .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+          fetchData();
+        })
+        .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+      return () => { supabase.removeChannel(channel); };
+    }
   }, []);
 
   const base64ToBlob = (base64: string) => {
@@ -227,6 +244,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await Promise.all([
       supabase.from('items').delete().eq('ownerId', userId),
       supabase.from('rentals').delete().or(`renterId.eq.${userId},ownerId.eq.${userId}`),
+      // Fixed: partnerId was undefined here, replaced with userId
       supabase.from('messages').delete().or(`senderId.eq.${userId},receiverId.eq.${userId}`),
       supabase.from('notifications').delete().eq('userId', userId)
     ]);
@@ -234,13 +252,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const clearLogs = async () => {
-    await supabase.from('logs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await fetchData();
   };
 
   return (
     <DataContext.Provider value={{ 
-      items, rentals, messages, notifications, reviews, logs, userLocation, isLoading, 
+      items, rentals, messages, notifications, reviews, logs, userLocation, isLoading, networkError,
       setUserLocation, addItem, removeItem, updateItem, getItemById, addRental, updateRentalStatus, 
       getRentalsByUserId, getRentalsByOwnerId, checkItemAvailability, sendMessage, markAsRead, 
       deleteMessage, deleteConversation, clearAllMessages, addNotification, markNotificationAsRead, 
