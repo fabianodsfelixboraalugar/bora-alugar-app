@@ -1,10 +1,10 @@
 
--- ==========================================
--- SCRIPT DE BANCO DE DADOS PADRONIZADO - BORA ALUGAR
--- Copie e cole no SQL Editor do Supabase e clique em RUN
--- ==========================================
+-- ========================================================
+-- SCRIPT DE REINSTALAÇÃO TOTAL - BORA ALUGAR
+-- ATENÇÃO: Este script apaga as tabelas existentes para corrigir as colunas.
+-- ========================================================
 
--- 1. LIMPEZA TOTAL
+-- 1. LIMPEZA (DROP)
 DROP TABLE IF EXISTS public.reviews CASCADE;
 DROP TABLE IF EXISTS public.messages CASCADE;
 DROP TABLE IF EXISTS public.notifications CASCADE;
@@ -22,13 +22,7 @@ CREATE TABLE public.profiles (
   cnpj TEXT,
   city TEXT,
   state TEXT,
-  address TEXT,
-  address_number TEXT,
-  complement TEXT,
-  neighborhood TEXT,
   zip_code TEXT,
-  job_title TEXT,
-  bio TEXT,
   avatar TEXT,
   joined_date TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
   plan TEXT DEFAULT 'Gratuito',
@@ -36,8 +30,9 @@ CREATE TABLE public.profiles (
   verification_status TEXT DEFAULT 'Não Iniciado',
   verified BOOLEAN DEFAULT FALSE,
   is_active BOOLEAN DEFAULT TRUE,
-  blocked_user_ids TEXT[] DEFAULT '{}',
-  trust_stats JSONB DEFAULT '{"score": 50, "level": "NEUTRAL", "completed_transactions": 0, "cancellations": 0, "avg_rating_as_owner": 0, "count_rating_as_owner": 0, "avg_rating_as_renter": 0, "count_rating_as_renter": 0}'::jsonb
+  trust_stats JSONB DEFAULT '{"score": 50, "level": "NEUTRAL", "completed_transactions": 0, "cancellations": 0, "avg_rating_as_owner": 0, "count_rating_as_owner": 0, "avg_rating_as_renter": 0, "count_rating_as_renter": 0}'::jsonb,
+  document_url TEXT,
+  selfie_url TEXT
 );
 
 -- 3. TABELA DE ITENS
@@ -105,7 +100,7 @@ CREATE TABLE public.notifications (
 
 -- 7. TABELA DE AVALIAÇÕES (REVIEWS)
 CREATE TABLE public.reviews (
-  id TEXT PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
   transaction_id TEXT REFERENCES public.rentals(id) ON DELETE CASCADE,
   item_id TEXT REFERENCES public.items(id) ON DELETE SET NULL,
   reviewer_id UUID REFERENCES public.profiles(id),
@@ -122,24 +117,23 @@ CREATE TABLE public.reviews (
 
 -- 8. POLÍTICAS DE SEGURANÇA (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Leitura pública de perfis" ON public.profiles FOR SELECT USING (true);
-CREATE POLICY "Usuários atualizam próprio perfil" ON public.profiles FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Inserção pelo Auth" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "Permitir leitura pública" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Permitir tudo ao próprio" ON public.profiles FOR ALL USING (auth.uid() = id);
 
 ALTER TABLE public.items ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Leitura pública de itens" ON public.items FOR SELECT USING (true);
-CREATE POLICY "Donos gerenciam seus itens" ON public.items FOR ALL USING (auth.uid() = owner_id);
+CREATE POLICY "Items leitura pública" ON public.items FOR SELECT USING (true);
+CREATE POLICY "Items dono gerencia" ON public.items FOR ALL USING (auth.uid() = owner_id);
 
 ALTER TABLE public.rentals ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Participantes veem seus aluguéis" ON public.rentals FOR SELECT USING (auth.uid() = renter_id OR auth.uid() = owner_id);
-CREATE POLICY "Locatários criam aluguéis" ON public.rentals FOR INSERT WITH CHECK (auth.uid() = renter_id);
+CREATE POLICY "Rentals leitura participantes" ON public.rentals FOR SELECT USING (auth.uid() = renter_id OR auth.uid() = owner_id);
+CREATE POLICY "Rentals locatário cria" ON public.rentals FOR INSERT WITH CHECK (auth.uid() = renter_id);
 
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Participantes veem mensagens" ON public.messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
-CREATE POLICY "Usuários enviam mensagens" ON public.messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
+CREATE POLICY "Mensagens ver participantes" ON public.messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
+CREATE POLICY "Mensagens enviar" ON public.messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
 
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Usuários veem suas notificações" ON public.notifications FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Notificações ver dono" ON public.notifications FOR SELECT USING (auth.uid() = user_id);
 
 -- 9. HABILITAR REALTIME
 ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles, public.items, public.rentals, public.messages, public.notifications;
