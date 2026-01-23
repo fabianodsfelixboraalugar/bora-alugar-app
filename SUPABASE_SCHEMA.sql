@@ -1,10 +1,13 @@
 
 -- ========================================================
--- SCRIPT DE REINSTALAÇÃO TOTAL - BORA ALUGAR
--- ATENÇÃO: Este script apaga as tabelas existentes para corrigir as colunas.
+-- SCRIPT DE REINSTALAÇÃO TOTAL V3 - BORA ALUGAR
+-- ATENÇÃO: Execute este script no SQL Editor do Supabase.
+-- Ele apaga tudo e recria com automação de perfis.
 -- ========================================================
 
--- 1. LIMPEZA (DROP)
+-- 1. LIMPEZA TOTAL
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP FUNCTION IF EXISTS public.handle_new_user();
 DROP TABLE IF EXISTS public.reviews CASCADE;
 DROP TABLE IF EXISTS public.messages CASCADE;
 DROP TABLE IF EXISTS public.notifications CASCADE;
@@ -15,8 +18,8 @@ DROP TABLE IF EXISTS public.profiles CASCADE;
 -- 2. TABELA DE PERFIS (PROFILES)
 CREATE TABLE public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  email TEXT NOT NULL,
+  name TEXT,
+  email TEXT,
   user_type TEXT DEFAULT 'Pessoa Física',
   cpf TEXT,
   cnpj TEXT,
@@ -35,7 +38,22 @@ CREATE TABLE public.profiles (
   selfie_url TEXT
 );
 
--- 3. TABELA DE ITENS
+-- 3. FUNÇÃO PARA CRIAR PERFIL AUTOMATICAMENTE (SOLUÇÃO PARA ERRO 400/401)
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.profiles (id, name, email)
+  VALUES (new.id, new.raw_user_meta_data->>'name', new.email);
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- GATILHO: Quando um usuário se cadastrar no AUTH, cria o perfil no PUBLIC automaticamente
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- 4. TABELA DE ITENS
 CREATE TABLE public.items (
   id TEXT PRIMARY KEY,
   owner_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -59,7 +77,7 @@ CREATE TABLE public.items (
   delivery_config JSONB DEFAULT '{"available": false, "fee": 0, "max_distance_km": 10}'::jsonb
 );
 
--- 4. TABELA DE ALUGUÉIS (RENTALS)
+-- 5. TABELA DE ALUGUÉIS (RENTALS)
 CREATE TABLE public.rentals (
   id TEXT PRIMARY KEY,
   item_id TEXT REFERENCES public.items(id) ON DELETE CASCADE,
@@ -76,7 +94,7 @@ CREATE TABLE public.rentals (
   contract_accepted BOOLEAN DEFAULT FALSE
 );
 
--- 5. TABELA DE MENSAGENS (CHAT)
+-- 6. TABELA DE MENSAGENS (CHAT)
 CREATE TABLE public.messages (
   id BIGSERIAL PRIMARY KEY,
   sender_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -86,7 +104,7 @@ CREATE TABLE public.messages (
   read BOOLEAN DEFAULT FALSE
 );
 
--- 6. TABELA DE NOTIFICAÇÕES
+-- 7. TABELA DE NOTIFICAÇÕES
 CREATE TABLE public.notifications (
   id BIGSERIAL PRIMARY KEY,
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -98,7 +116,7 @@ CREATE TABLE public.notifications (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
--- 7. TABELA DE AVALIAÇÕES (REVIEWS)
+-- 8. TABELA DE AVALIAÇÕES (REVIEWS)
 CREATE TABLE public.reviews (
   id BIGSERIAL PRIMARY KEY,
   transaction_id TEXT REFERENCES public.rentals(id) ON DELETE CASCADE,
@@ -115,25 +133,27 @@ CREATE TABLE public.reviews (
   criteria JSONB
 );
 
--- 8. POLÍTICAS DE SEGURANÇA (RLS)
+-- 9. POLÍTICAS DE SEGURANÇA (RLS) - MAIS PERMISSIVAS PARA DESENVOLVIMENTO
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Permitir leitura pública" ON public.profiles FOR SELECT USING (true);
-CREATE POLICY "Permitir tudo ao próprio" ON public.profiles FOR ALL USING (auth.uid() = id);
+CREATE POLICY "Leitura pública" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Próprio usuário edita" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
 ALTER TABLE public.items ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Items leitura pública" ON public.items FOR SELECT USING (true);
-CREATE POLICY "Items dono gerencia" ON public.items FOR ALL USING (auth.uid() = owner_id);
+CREATE POLICY "Itens públicos" ON public.items FOR SELECT USING (true);
+CREATE POLICY "Dono insere item" ON public.items FOR INSERT WITH CHECK (auth.uid() = owner_id);
+CREATE POLICY "Dono atualiza" ON public.items FOR UPDATE USING (auth.uid() = owner_id);
+CREATE POLICY "Dono deleta" ON public.items FOR DELETE USING (auth.uid() = owner_id);
 
 ALTER TABLE public.rentals ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Rentals leitura participantes" ON public.rentals FOR SELECT USING (auth.uid() = renter_id OR auth.uid() = owner_id);
-CREATE POLICY "Rentals locatário cria" ON public.rentals FOR INSERT WITH CHECK (auth.uid() = renter_id);
+CREATE POLICY "Ver aluguéis" ON public.rentals FOR SELECT USING (auth.uid() = renter_id OR auth.uid() = owner_id);
+CREATE POLICY "Criar aluguel" ON public.rentals FOR INSERT WITH CHECK (auth.uid() = renter_id);
 
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Mensagens ver participantes" ON public.messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
-CREATE POLICY "Mensagens enviar" ON public.messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
+CREATE POLICY "Ver mensagens" ON public.messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
+CREATE POLICY "Enviar mensagens" ON public.messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
 
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Notificações ver dono" ON public.notifications FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Ver notificações" ON public.notifications FOR SELECT USING (auth.uid() = user_id);
 
--- 9. HABILITAR REALTIME
+-- 10. HABILITAR REALTIME
 ALTER PUBLICATION supabase_realtime ADD TABLE public.profiles, public.items, public.rentals, public.messages, public.notifications;

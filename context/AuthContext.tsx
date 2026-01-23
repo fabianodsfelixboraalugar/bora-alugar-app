@@ -8,7 +8,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   allUsers: User[];
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{success: boolean, message?: string}>;
   register: (data: any) => Promise<void>;
   logout: () => void;
   updateUser: (data: Partial<User>) => Promise<void>;
@@ -45,8 +45,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const fetchUsers = async () => {
-    const { data } = await supabase.from('profiles').select('*');
-    if (data) setAllUsers(data.map(mapProfile));
+    try {
+      const { data, error } = await supabase.from('profiles').select('*');
+      if (error) throw error;
+      if (data) setAllUsers(data.map(mapProfile));
+    } catch (e) {
+      console.warn("Erro ao buscar perfis (pode ser RLS):", e);
+    }
   };
 
   useEffect(() => {
@@ -72,41 +77,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe();
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<{success: boolean, message?: string}> => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return false;
-    return !!data.user;
+    if (error) {
+      if (error.message.includes("Email not confirmed")) {
+        return { success: false, message: "E-mail não confirmado! Verifique sua caixa de entrada." };
+      }
+      return { success: false, message: "E-mail ou senha incorretos." };
+    }
+    return { success: !!data.user };
   };
 
   const register = async (data: any) => {
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
+      options: {
+        data: {
+          name: data.name
+        }
+      }
     });
 
     if (authError) {
-      if (authError.status === 429) throw new Error("Muitas tentativas! Aguarde 1 minuto para tentar novamente.");
+      if (authError.status === 429) throw new Error("Muitas tentativas! Aguarde 1 minuto.");
       throw authError;
     }
 
-    if (authData.user) {
-      const profile = {
-        id: authData.user.id,
-        name: data.name,
-        email: data.email,
-        user_type: data.userType,
-        zip_code: data.zipCode,
-        city: data.city,
-        state: data.state,
-        role: 'USER',
-        plan: UserPlan.FREE,
-        verification_status: VerificationStatus.NOT_STARTED,
-        is_active: true,
-        trust_stats: { score: 50, level: 'NEUTRAL', completed_transactions: 0, cancellations: 0, avg_rating_as_owner: 0, count_rating_as_owner: 0, avg_rating_as_renter: 0, count_rating_as_renter: 0 }
-      };
-      const { error: profileError } = await supabase.from('profiles').insert([profile]);
-      if (profileError) console.error("Erro ao criar perfil:", profileError);
-    }
+    // O Perfil agora é criado automaticamente pelo TRIGGER handle_new_user() no banco.
+    // Não precisamos de supabase.from('profiles').insert() aqui.
+    
     await fetchUsers();
   };
 
@@ -161,7 +161,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const createCollaborator = async (data: any) => {
-    // Para simplificar, colaboradores são criados via registro normal
     await register(data);
   };
 
