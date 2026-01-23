@@ -32,10 +32,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Helper to fetch all users for state
   const fetchUsers = async () => {
-    const { data } = await supabase.from('profiles').select('*');
-    if (data) setAllUsers(data as User[]);
+    try {
+      const { data, error } = await supabase.from('profiles').select('*');
+      if (error) throw error;
+      if (data) setAllUsers(data as User[]);
+    } catch (err) {
+      console.warn("Erro ao buscar usuários. Verifique se o script SQL foi executado.");
+    }
+  };
+
+  const createInitialProfile = async (userId: string, email: string, name: string) => {
+    const profile = {
+      id: userId,
+      name: name || email.split('@')[0],
+      email: email,
+      joinedDate: new Date().toISOString(),
+      plan: UserPlan.FREE,
+      role: 'USER',
+      verificationStatus: VerificationStatus.NOT_STARTED,
+      isActive: true,
+      trustStats: { score: 50, level: 'NEUTRAL', completedTransactions: 0, cancellations: 0, avgRatingAsOwner: 0, countRatingAsOwner: 0, avgRatingAsRenter: 0, countRatingAsRenter: 0 }
+    };
+    const { error } = await supabase.from('profiles').insert([profile]);
+    return { data: profile, error };
   };
 
   useEffect(() => {
@@ -43,11 +63,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data: { session } } = await supabase.auth.getSession();
       
       if (session?.user) {
-        const { data: profile } = await supabase
+        let { data: profile, error } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
           .single();
+
+        // Auto-Repair: Se logado mas sem perfil, cria um
+        if (error && session.user.id) {
+          console.log("Perfil não encontrado. Criando perfil inicial...");
+          const { data: newProfile } = await createInitialProfile(session.user.id, session.user.email!, '');
+          profile = newProfile;
+        }
 
         if (profile) {
           setAuth({ user: profile as User, isAuthenticated: true });
@@ -66,12 +93,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .select('*')
           .eq('id', session.user.id)
           .single();
-        setAuth({ user: profile as User, isAuthenticated: true });
+        
+        if (profile) {
+          setAuth({ user: profile as User, isAuthenticated: true });
+        } else {
+          // Fallback se perfil ainda estiver sendo criado no register
+          setAuth({ user: { id: session.user.id, email: session.user.email, name: 'Carregando...' } as any, isAuthenticated: true });
+        }
       } else {
         setAuth({ user: null, isAuthenticated: false });
       }
       await fetchUsers();
-      setIsLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -79,9 +111,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password?: string): Promise<boolean> => {
     setIsLoading(true);
-    let targetEmail = email;
     const isAdminAttempt = email.startsWith('*');
-    if (isAdminAttempt) targetEmail = email.substring(1);
+    const targetEmail = isAdminAttempt ? email.substring(1) : email;
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email: targetEmail,
@@ -93,6 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     }
 
+    // Verifica acesso admin
     if (isAdminAttempt) {
       const { data: profile } = await supabase
         .from('profiles')
@@ -125,6 +157,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email: userData.email,
       userType: userData.userType,
       city: userData.city,
+      state: userData.state,
+      zipCode: userData.zipCode,
       joinedDate: new Date().toISOString(),
       plan: UserPlan.FREE,
       role: 'USER',
@@ -146,7 +180,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .from('profiles')
       .insert([newUserProfile]);
 
-    if (profileError) throw profileError;
+    if (profileError) {
+      console.error("Erro ao criar perfil. Verifique as colunas do banco:", profileError);
+      throw profileError;
+    }
     await fetchUsers();
   };
 
@@ -174,7 +211,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const getUserById = (id: string) => allUsers.find(u => u.id === id);
-
   const getPendingUsers = () => allUsers.filter(u => u.verificationStatus === VerificationStatus.PENDING);
 
   const adminUpdateUser = async (userId: string, data: Partial<User>) => {
@@ -196,21 +232,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       documentUrl, 
       selfieUrl, 
       verificationStatus: VerificationStatus.PENDING 
-    });
+    } as any);
   };
 
   const deleteUser = async (userId: string) => {
-    // In a real Supabase setup, you'd call a RPC or Edge Function to delete from auth.users
-    // For this mock/frontend-centric logic, we delete the profile
     await supabase.from('profiles').delete().eq('id', userId);
     await fetchUsers();
   };
 
   const adminApproveKYC = async (userId: string) => {
+    const target = getUserById(userId);
     await adminUpdateUser(userId, { 
       verificationStatus: VerificationStatus.VERIFIED, 
       verified: true,
-      trustStats: { ...getUserById(userId)?.trustStats!, score: 75 } as any
+      trustStats: { ...target?.trustStats!, score: 75 } as any
     });
   };
 
@@ -219,7 +254,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const createCollaborator = async (userData: any) => {
-    // Logic similar to register but specifically for staff/admin
     const { data, error } = await supabase.auth.signUp({
       email: userData.email,
       password: userData.password,

@@ -19,7 +19,7 @@ const isDefault = (val: string) =>
 
 export const isSupabaseConfigured = !isDefault(supabaseUrl) && !isDefault(supabaseAnonKey);
 
-// Objeto mock para quando o Supabase não está configurado ou falha
+// Objeto mock para quando o Supabase não está configurado
 const mockClient = {
   from: () => ({
     select: () => ({ 
@@ -42,18 +42,10 @@ const mockClient = {
       upload: async () => ({ data: null, error: true }), 
       getPublicUrl: () => ({ data: { publicUrl: '' } }) 
     }) 
-  },
-  channel: () => ({
-    on: () => ({ subscribe: () => ({}) }),
-  }),
-  removeChannel: () => {}
+  }
 };
 
 export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-      }
-    })
+  ? createClient(supabaseUrl, supabaseAnonKey)
   : (mockClient as any);
+
