@@ -110,13 +110,18 @@ export const Register: React.FC = () => {
     setIsSubmitting(true);
     try {
       await register({ ...formData });
-      navigate('/dashboard');
+      // Se não houver erro, o Supabase enviará um e-mail de confirmação (se ativado)
+      alert("Conta criada com sucesso! Verifique seu e-mail para confirmar o cadastro antes de fazer login.");
+      navigate('/login');
     } catch (err: any) {
-      console.error(err);
-      if (err.status === 429 || err.message?.includes('429')) {
-        setError("Muitas tentativas! Por segurança, aguarde 60 segundos antes de tentar novamente.");
+      console.error("Erro no Registro:", err);
+      // Tratamento específico para o erro 429 (Muitas tentativas)
+      if (err.message?.includes('429') || err.status === 429) {
+        setError("⚠️ LIMITE DE SEGURANÇA: Muitas tentativas de cadastro seguidas. O Supabase bloqueou seu IP por 1 minuto. Por favor, aguarde e tente novamente.");
+      } else if (err.message?.includes('User already registered')) {
+        setError("Este e-mail já está cadastrado. Tente fazer login.");
       } else {
-        setError(err.message || "Erro ao criar conta. Tente novamente.");
+        setError(err.message || "Erro ao criar conta. Verifique sua conexão.");
       }
     } finally {
       setIsSubmitting(false);
@@ -162,6 +167,13 @@ export const Register: React.FC = () => {
                   <div className="relative" ref={emailInputRef}>
                       <label className={labelStyle}>Email</label>
                       <input type="email" required className={inputStyle} value={formData.email} onChange={handleEmailChange} autoComplete="off" />
+                      {showEmailSuggestions && (
+                        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-2xl py-2">
+                          {emailSuggestions.map((s, idx) => (
+                            <button key={idx} type="button" className="w-full text-left px-4 py-2 text-xs hover:bg-brand-50" onClick={() => selectEmailSuggestion(s)}>{s}</button>
+                          ))}
+                        </div>
+                      )}
                   </div>
               </div>
 
@@ -172,7 +184,10 @@ export const Register: React.FC = () => {
                   </div>
                   <div>
                       <label className={labelStyle}>CEP</label>
-                      <input type="text" required className={inputStyle} value={formData.zipCode} onChange={handleZipCodeChange} placeholder="00000-000" />
+                      <div className="relative">
+                        <input type="text" required className={inputStyle} value={formData.zipCode} onChange={handleZipCodeChange} placeholder="00000-000" />
+                        {isLoadingCep && <i className="fas fa-spinner fa-spin absolute right-4 top-1/2 -translate-y-1/2 text-brand-500"></i>}
+                      </div>
                   </div>
               </div>
 
@@ -194,7 +209,10 @@ export const Register: React.FC = () => {
                   </div>
                   <div>
                       <label className={labelStyle}>Confirmar</label>
-                      <input type={showConfirmPassword ? "text" : "password"} required className={inputStyle} value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} />
+                      <div className="relative">
+                        <input type={showConfirmPassword ? "text" : "password"} required className={inputStyle} value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} />
+                        <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400"><i className={`fas ${showConfirmPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i></button>
+                      </div>
                   </div>
               </div>
           </div>
@@ -204,7 +222,11 @@ export const Register: React.FC = () => {
             <label htmlFor="accept-terms-register" className="text-xs text-gray-500 cursor-pointer">Li e aceito os termos.</label>
           </div>
 
-          {error && <div className="bg-red-50 p-3 rounded-xl text-red-600 text-[10px] font-black uppercase text-center border border-red-100">{error}</div>}
+          {error && (
+            <div className={`p-4 rounded-xl text-[10px] font-black uppercase text-center border animate-pulse ${error.includes('⚠️') ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-red-50 text-red-600 border-red-100'}`}>
+              {error}
+            </div>
+          )}
 
           <button 
             type="submit" 

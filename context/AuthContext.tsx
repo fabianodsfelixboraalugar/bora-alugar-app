@@ -46,9 +46,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUsers = async () => {
     try {
-      const { data, error } = await supabase.from('profiles').select('*');
+      // Destructure status from the response as PostgrestError does not contain HTTP status
+      const { data, error, status } = await supabase.from('profiles').select('*');
       if (error) {
-        if (error.code === 'PGRST301' || error.message.includes('JWT')) return; // Silencia erro de sessão expirada
+        // Silencia erros comuns de desenvolvimento/sessão
+        if (error.code === 'PGRST301' || status === 401) return;
         throw error;
       }
       if (data) setAllUsers(data.map(mapProfile));
@@ -60,13 +62,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          // Se o token estiver corrompido, limpa a sessão local
+          if (sessionError.status === 401 || sessionError.status === 400) {
+            await supabase.auth.signOut();
+          }
+        }
+
         if (session?.user) {
           const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-          if (profile) setUser(mapProfile(profile));
+          if (profile) {
+            setUser(mapProfile(profile));
+          }
         }
       } catch (e) {
-        console.error("Erro ao inicializar auth:", e);
+        console.error("Erro na inicialização de segurança:", e);
       } finally {
         await fetchUsers();
         setIsLoading(false);
@@ -75,29 +87,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setAllUsers([]);
+      } else if (session?.user) {
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
         if (profile) setUser(mapProfile(profile));
-      } else {
-        setUser(null);
       }
       await fetchUsers();
     });
+    
     return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, password: string): Promise<{success: boolean, message?: string}> => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      if (error.message.includes("Email not confirmed")) {
-        return { success: false, message: "E-mail não confirmado! Verifique sua caixa de entrada." };
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (error) {
+        if (error.message.includes("Email not confirmed")) {
+          return { success: false, message: "⚠️ E-mail não confirmado! Verifique sua caixa de entrada e clique no link de ativação." };
+        }
+        if (error.status === 429) {
+          return { success: false, message: "⚠️ Muitas tentativas! Por favor, aguarde 60 segundos." };
+        }
+        return { success: false, message: "E-mail ou senha incorretos." };
       }
-      if (error.status === 429) {
-        return { success: false, message: "Muitas tentativas! Aguarde 1 minuto." };
-      }
-      return { success: false, message: "E-mail ou senha incorretos." };
+      
+      return { success: !!data.user };
+    } catch (e) {
+      return { success: false, message: "Erro inesperado ao tentar entrar." };
     }
-    return { success: !!data.user };
   };
 
   const register = async (data: any) => {
@@ -112,11 +132,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (authError) {
-      if (authError.status === 429) throw new Error("Muitas tentativas! Por segurança, o Supabase bloqueou seu acesso temporariamente. Aguarde 60 segundos.");
+      if (authError.status === 429) {
+        throw new Error("MUITAS TENTATIVAS: O servidor bloqueou novas contas temporariamente para este IP. Por favor, aguarde exatamente 60 segundos e tente novamente.");
+      }
       throw authError;
     }
     
-    // Perfil criado via Trigger no SQL
+    // Perfil criado via Trigger no SQL (SUPABASE_SCHEMA.sql)
     await fetchUsers();
   };
 
