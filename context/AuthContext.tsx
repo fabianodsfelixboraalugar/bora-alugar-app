@@ -86,7 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } finally {
         if (mounted) {
           await fetchUsers();
-          setIsLoading(false); // Garante que o splash suma na carga inicial
+          setIsLoading(false); // Finalização crítica da carga inicial
         }
       }
     };
@@ -96,7 +96,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
-      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED') {
+      // Tratamos SIGNED_IN, USER_UPDATED e TOKEN_REFRESHED. 
+      // REMOVIDO: INITIAL_SESSION para evitar conflito com initAuth()
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED') {
         if (session?.user) {
           setIsLoading(true);
           try {
@@ -115,6 +117,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAllUsers([]);
         setIsLoading(false);
       } else {
+        // Garante que qualquer outro evento (como INITIAL_SESSION ignorado) finalize o loading
         setIsLoading(false);
       }
     });
