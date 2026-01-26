@@ -55,7 +55,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
       if (data) setAllUsers(data.map(p => mapProfile(p)));
     } catch (e) {
-      console.warn("Aviso: Falha ao sincronizar lista de perfis.");
+      console.warn("Aviso: Falha ao sincronizar lista de perfis secundários.");
     }
   };
 
@@ -82,11 +82,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await fetchProfile(session.user.id, session.user);
         }
       } catch (e) {
-        console.error("Erro ao verificar sessão inicial:", e);
+        console.error("Erro na inicialização:", e);
       } finally {
         if (mounted) {
           await fetchUsers();
-          setIsLoading(false); // GARANTIA DE FINALIZAÇÃO
+          setIsLoading(false); // Garante que o splash suma na carga inicial
         }
       }
     };
@@ -96,21 +96,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
-      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED') {
         if (session?.user) {
           setIsLoading(true);
           try {
-            await fetchProfile(session.user.id, session.user);
-            await fetchUsers();
+            await Promise.all([
+              fetchProfile(session.user.id, session.user),
+              fetchUsers()
+            ]);
           } finally {
             setIsLoading(false);
           }
+        } else {
+          setIsLoading(false);
         }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
+        setAllUsers([]);
         setIsLoading(false);
       } else {
-        // Para outros eventos (como INITIAL_SESSION sem usuário), encerramos o loading
         setIsLoading(false);
       }
     });
@@ -158,7 +162,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (authError) throw authError;
 
-      // Se não houver sessão mas houver usuário, significa que precisa confirmar e-mail
       const needsConfirmation = !authData.session && !!authData.user;
       
       return { 

@@ -30,7 +30,7 @@ const LoadingScreen: React.FC = () => (
     <div className="flex flex-col items-center">
       <Logo className="h-24 mb-8 animate-pulse" />
       <div className="w-12 h-12 border-4 border-brand-100 border-t-brand-500 rounded-full animate-spin"></div>
-      <p className="mt-6 text-gray-400 font-black text-[10px] uppercase tracking-[0.3em] animate-pulse">Sincronizando...</p>
+      <p className="mt-6 text-gray-400 font-black text-[10px] uppercase tracking-[0.3em] animate-pulse">Iniciando sistema...</p>
     </div>
   </div>
 );
@@ -42,12 +42,12 @@ const ConfigErrorScreen: React.FC<{ type?: 'config' | 'network' }> = ({ type = '
         <i className={`fas ${type === 'network' ? 'fa-wifi' : 'fa-plug'} text-3xl`}></i>
       </div>
       <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tighter mb-4 leading-tight">
-        {type === 'network' ? 'Erro de Conexão' : 'Quase lá!'}
+        {type === 'network' ? 'Erro de Conexão' : 'Configuração Necessária'}
       </h2>
       <p className="text-gray-500 text-sm font-medium leading-relaxed mb-8">
         {type === 'network' 
-          ? 'Não conseguimos conectar ao banco de dados. Verifique sua conexão.' 
-          : 'Configure as chaves do Supabase em lib/supabase.ts.'}
+          ? 'Não conseguimos conectar ao servidor. Verifique sua internet.' 
+          : 'As chaves do Supabase não foram configuradas corretamente em lib/supabase.ts.'}
       </p>
       <button 
         onClick={() => window.location.reload()}
@@ -67,8 +67,8 @@ const AppContent: React.FC = () => {
     return <ConfigErrorScreen type="network" />;
   }
 
-  // Só mostra a tela de carregamento total se estivermos validando a identidade/sessão inicial
-  // Após isso, permitimos que a UI carregue enquanto os dados (mensagens, itens) sincronizam em segundo plano.
+  // Só bloqueia a UI se a autenticação ainda estiver carregando (estado inicial crítico)
+  // Após a primeira resposta do Auth, permitimos que os dados sincronizem em background
   const showFullSplash = isAuthLoading;
 
   return (
@@ -77,7 +77,7 @@ const AppContent: React.FC = () => {
       <Navbar />
       <main className="flex-grow">
         {isDataLoading && !showFullSplash && (
-          <div className="h-1 bg-brand-100 overflow-hidden">
+          <div className="h-1 bg-brand-100 overflow-hidden fixed top-20 left-0 right-0 z-50">
             <div className="h-full bg-brand-500 animate-[progress_2s_ease-in-out_infinite] w-1/3"></div>
           </div>
         )}

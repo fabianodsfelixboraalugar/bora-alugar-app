@@ -26,23 +26,12 @@ export const Register: React.FC = () => {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRegistered, setIsRegistered] = useState(false); // Novo estado para sucesso
+  const [isRegistered, setIsRegistered] = useState(false);
   const [isLoadingCep, setIsLoadingCep] = useState(false);
-  const [retryTimer, setRetryTimer] = useState(0);
   
   const { register, isValidTaxId } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    let interval: any;
-    if (retryTimer > 0) {
-      interval = setInterval(() => {
-        setRetryTimer((prev) => prev - 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [retryTimer]);
 
   const passwordCriteria = useMemo(() => ({
     length: formData.password.length >= 8,
@@ -61,12 +50,10 @@ export const Register: React.FC = () => {
     }
   };
 
-  const maskCEP = (value: string) => value.replace(/\D/g, '').replace(/^(\d{5})(\d)/, '$1-$2').slice(0, 9);
-
   const handleZipCodeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const maskedValue = maskCEP(e.target.value);
-    setFormData(prev => ({ ...prev, zipCode: maskedValue }));
-    const cleanCep = maskedValue.replace(/\D/g, '');
+    const value = e.target.value.replace(/\D/g, '').replace(/^(\d{5})(\d)/, '$1-$2').slice(0, 9);
+    setFormData(prev => ({ ...prev, zipCode: value }));
+    const cleanCep = value.replace(/\D/g, '');
     
     if (cleanCep.length === 8) {
       setIsLoadingCep(true);
@@ -92,7 +79,7 @@ export const Register: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (retryTimer > 0 || isSubmitting) return;
+    if (isSubmitting) return;
     
     if (!acceptedTerms) { showToast("Aceite os termos para continuar.", 'warning'); return; }
     if (!isValidTaxId(formData.taxId, formData.userType)) { showToast("Documento (CPF/CNPJ) inválido.", 'error'); return; }
@@ -106,7 +93,7 @@ export const Register: React.FC = () => {
       if (result.success) {
         if (result.needsConfirmation) {
           setIsRegistered(true);
-          showToast("Cadastro quase pronto! Verifique seu e-mail.", 'info');
+          showToast("Cadastro realizado! Verifique seu e-mail.", 'info');
         } else {
           showToast("Cadastro realizado com sucesso!", 'success');
           navigate('/login');
@@ -114,10 +101,9 @@ export const Register: React.FC = () => {
       } else {
         const msg = result.message || "";
         if (msg.includes('already registered')) {
-          showToast("Este e-mail já está cadastrado. Tente fazer login.", 'error');
-          setTimeout(() => navigate('/login'), 2000);
+          showToast("E-mail já cadastrado. Tente fazer login.", 'error');
         } else {
-          showToast(msg || "Erro ao criar conta.", 'error');
+          showToast(msg, 'error');
         }
       }
     } catch (err: any) {
@@ -127,10 +113,6 @@ export const Register: React.FC = () => {
     }
   };
 
-  const inputStyle = "w-full bg-white border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-brand-500 text-gray-800 transition-all text-sm font-medium shadow-sm";
-  const labelStyle = "block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1";
-
-  // VIEW DE SUCESSO (E-MAIL PENDENTE)
   if (isRegistered) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4 py-12">
@@ -138,23 +120,23 @@ export const Register: React.FC = () => {
           <div className="w-24 h-24 bg-brand-50 rounded-full flex items-center justify-center mx-auto mb-8 border-2 border-brand-100 shadow-inner">
             <i className="fas fa-paper-plane text-brand-500 text-4xl animate-bounce"></i>
           </div>
-          <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight mb-4">Verifique seu E-mail</h2>
+          <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight mb-4">Quase lá!</h2>
           <p className="text-gray-500 text-sm font-medium leading-relaxed mb-8">
             Enviamos um link de ativação para <br/><span className="text-brand-600 font-bold">{formData.email}</span>.<br/> 
-            Acesse sua caixa de entrada para liberar seu acesso ao Bora Alugar.
+            Acesse seu e-mail para confirmar sua conta e começar a alugar.
           </p>
           <div className="space-y-4">
             <Link to="/login" className="block w-full bg-brand-500 text-white font-black py-5 rounded-[2rem] shadow-xl hover:bg-brand-600 transition transform active:scale-95 uppercase text-xs tracking-widest">
               Ir para o Login
             </Link>
-            <button onClick={() => window.location.reload()} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-brand-600 transition">
-              Não recebeu? Tentar novamente
-            </button>
           </div>
         </div>
       </div>
     );
   }
+
+  const inputStyle = "w-full bg-white border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-brand-500 text-gray-800 transition-all text-sm font-medium shadow-sm";
+  const labelStyle = "block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1";
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4 py-12">
@@ -226,10 +208,10 @@ export const Register: React.FC = () => {
 
           <button 
             type="submit" 
-            disabled={isSubmitting || retryTimer > 0}
-            className={`w-full text-white font-black py-5 rounded-[2rem] shadow-xl transition transform active:scale-[0.98] uppercase tracking-[0.1em] text-sm ${retryTimer > 0 ? 'bg-gray-400 cursor-wait' : 'bg-brand-500 hover:bg-brand-600 shadow-brand-100'}`}
+            disabled={isSubmitting}
+            className={`w-full text-white font-black py-5 rounded-[2rem] shadow-xl transition transform active:scale-[0.98] uppercase tracking-[0.1em] text-sm ${isSubmitting ? 'bg-gray-400 cursor-wait' : 'bg-brand-500 hover:bg-brand-600 shadow-brand-100'}`}
           >
-            {retryTimer > 0 ? `Aguarde ${retryTimer}s` : (isSubmitting ? <span className="flex items-center justify-center gap-2"><i className="fas fa-spinner fa-spin mr-2"></i> PROCESSANDO...</span> : 'Finalizar Cadastro')}
+            {isSubmitting ? <span className="flex items-center justify-center gap-2"><i className="fas fa-spinner fa-spin mr-2"></i> PROCESSANDO...</span> : 'Finalizar Cadastro'}
           </button>
           
           <div className="text-center text-[10px] font-black text-gray-300 uppercase tracking-widest">
