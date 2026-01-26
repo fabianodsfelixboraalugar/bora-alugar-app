@@ -1,8 +1,9 @@
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { HashRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider, useData } from './context/DataContext';
+import { ToastProvider } from './context/ToastContext';
 import { Navbar } from './components/Navbar';
 import { Home } from './pages/Home';
 import { Search } from './pages/Search';
@@ -23,7 +24,6 @@ import { InstallPwaNotification } from './components/InstallPwaNotification';
 import { CookieConsent } from './components/CookieConsent';
 import { isSupabaseConfigured } from './lib/supabase';
 
-// Tela de Erro Amigável para evitar tela branca ou erros de rede
 const ConfigErrorScreen: React.FC<{ type?: 'config' | 'network' }> = ({ type = 'config' }) => (
   <div className="min-h-screen bg-brand-900 flex items-center justify-center p-6 text-center">
     <div className="max-w-md w-full bg-white rounded-[3rem] p-10 shadow-2xl animate-fadeIn border-t-8 border-brand-500">
@@ -35,24 +35,9 @@ const ConfigErrorScreen: React.FC<{ type?: 'config' | 'network' }> = ({ type = '
       </h2>
       <p className="text-gray-500 text-sm font-medium leading-relaxed mb-8">
         {type === 'network' 
-          ? 'Não conseguimos conectar ao banco de dados. Verifique se a URL do Supabase no arquivo lib/supabase.ts está correta e se o projeto está ativo.' 
-          : 'O aplicativo detectou que as chaves do Supabase ainda não foram coladas ou estão incorretas no arquivo lib/supabase.ts.'}
+          ? 'Não conseguimos conectar ao banco de dados. Verifique sua conexão.' 
+          : 'Configure as chaves do Supabase em lib/supabase.ts.'}
       </p>
-      <div className="bg-gray-50 p-6 rounded-2xl text-left border border-gray-100 space-y-3 mb-8">
-        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Resolução de Problemas:</p>
-        <div className="flex items-start gap-3">
-            <span className="bg-brand-500 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">1</span>
-            <p className="text-xs text-gray-600 font-bold">Confirme que a URL começa com <span className="text-brand-600">https://</span> e termina com <span className="text-brand-600">.supabase.co</span></p>
-        </div>
-        <div className="flex items-start gap-3">
-            <span className="bg-brand-500 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">2</span>
-            <p className="text-xs text-gray-600 font-bold">Certifique-se de que a chave ANON começa com <span className="text-brand-600">eyJ...</span></p>
-        </div>
-        <div className="flex items-start gap-3">
-            <span className="bg-brand-500 text-white w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">3</span>
-            <p className="text-xs text-gray-600 font-bold">Reinicie o servidor (<code className="bg-gray-200 px-1 rounded">npm run dev</code>) após salvar as alterações.</p>
-        </div>
-      </div>
       <button 
         onClick={() => window.location.reload()}
         className="w-full bg-brand-500 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest shadow-lg active:scale-95 transition"
@@ -63,9 +48,8 @@ const ConfigErrorScreen: React.FC<{ type?: 'config' | 'network' }> = ({ type = '
   </div>
 );
 
-// Componente Wrapper para detectar erros de rede no Contexto
 const AppContent: React.FC = () => {
-  const { networkError, isLoading } = useData();
+  const { networkError } = useData();
 
   if (networkError) {
     return <ConfigErrorScreen type="network" />;
@@ -109,50 +93,34 @@ const AppContent: React.FC = () => {
           <div className="flex flex-wrap justify-center gap-x-8 gap-y-4 mb-8 max-w-4xl mx-auto">
             <Link to="/ajuda" className="text-gray-500 hover:text-brand-600 font-bold text-[11px] transition uppercase tracking-widest">Como podemos te ajudar?</Link>
             <Link to="/termos" className="text-gray-500 hover:text-brand-600 font-bold text-[11px] transition uppercase tracking-widest">Termos e Condições</Link>
-            <Link to="/privacidade" className="text-gray-500 hover:text-brand-600 font-bold text-[11px] transition uppercase tracking-widest">Política de Privacidade</Link>
           </div>
-          <div className="text-gray-500 text-sm space-y-1 border-t border-gray-50 pt-8">
-            <p>&copy; {new Date().getFullYear()} Bora Alugar. Todos os direitos reservados.</p>
-          </div>
+          <p className="text-gray-500 text-sm">&copy; {new Date().getFullYear()} Bora Alugar. Todos os direitos reservados.</p>
         </div>
       </footer>
     </div>
   );
 };
 
-// Componente de Proteção para o Painel Master
 const AdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isAuthenticated } = useAuth();
-  
-  if (!isAuthenticated || !user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  const isAuthorized = user.isActive !== false && (
-    user.role === 'ADMIN' || 
-    (user.jobTitle && user.jobTitle.trim().length > 0) || 
-    user.id.startsWith('colab_')
-  );
-
-  if (!isAuthorized) {
-    return <Navigate to="/" replace />;
-  }
-
+  if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
+  const isAuthorized = user.isActive !== false && (user.role === 'ADMIN' || !!user.jobTitle || user.id.startsWith('colab_'));
+  if (!isAuthorized) return <Navigate to="/" replace />;
   return <>{children}</>;
 };
 
 function App() {
-  if (!isSupabaseConfigured) {
-    return <ConfigErrorScreen type="config" />;
-  }
+  if (!isSupabaseConfigured) return <ConfigErrorScreen type="config" />;
 
   return (
     <HashRouter>
-      <DataProvider>
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
-      </DataProvider>
+      <ToastProvider>
+        <DataProvider>
+          <AuthProvider>
+            <AppContent />
+          </AuthProvider>
+        </DataProvider>
+      </ToastProvider>
     </HashRouter>
   );
 }
