@@ -1,14 +1,10 @@
 
 -- ========================================================
--- SCRIPT DE REINSTALAÇÃO TOTAL V5 - BORA ALUGAR
--- ATENÇÃO: Execute este script no SQL Editor do Supabase para corrigir o erro 422.
+-- SCRIPT DE REINSTALAÇÃO TOTAL V6 - BORA ALUGAR
+-- ATENÇÃO: Execute este script no SQL Editor do Supabase para corrigir erros de cadastro (422).
 -- ========================================================
 
--- 1. LIMPEZA TOTAL (OPCIONAL - USE COM CAUTELA)
--- DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
--- DROP FUNCTION IF EXISTS public.handle_new_user();
-
--- 2. TABELA DE PERFIS (GARANTINDO CAMPOS NECESSÁRIOS)
+-- 1. TABELA DE PERFIS (GARANTINDO CAMPOS NECESSÁRIOS)
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT,
@@ -31,10 +27,15 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   selfie_url TEXT
 );
 
--- 3. FUNÇÃO DE GATILHO MELHORADA (ROBUSTEZ CONTRA 422)
+-- 2. FUNÇÃO DE GATILHO ROBUSTA
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  meta_user_type TEXT;
 BEGIN
+  -- Extrai o tipo de usuário com fallback
+  meta_user_type := COALESCE(new.raw_user_meta_data->>'user_type', 'Pessoa Física');
+
   INSERT INTO public.profiles (
     id, 
     name, 
@@ -48,29 +49,35 @@ BEGIN
   )
   VALUES (
     new.id, 
-    COALESCE(new.raw_user_meta_data->>'name', 'Usuário'), 
+    COALESCE(new.raw_user_meta_data->>'name', 'Novo Usuário'), 
     new.email,
-    COALESCE(new.raw_user_meta_data->>'user_type', 'Pessoa Física'),
+    meta_user_type,
     new.raw_user_meta_data->>'city',
     new.raw_user_meta_data->>'state',
     new.raw_user_meta_data->>'zip_code',
-    CASE WHEN (new.raw_user_meta_data->>'user_type') = 'Pessoa Física' THEN new.raw_user_meta_data->>'tax_id' ELSE NULL END,
-    CASE WHEN (new.raw_user_meta_data->>'user_type') = 'Pessoa Jurídica' THEN new.raw_user_meta_data->>'tax_id' ELSE NULL END
+    -- Lógica para CPF/CNPJ
+    CASE WHEN meta_user_type = 'Pessoa Física' THEN new.raw_user_meta_data->>'tax_id' ELSE NULL END,
+    CASE WHEN meta_user_type = 'Pessoa Jurídica' THEN new.raw_user_meta_data->>'tax_id' ELSE NULL END
   );
+  
   RETURN new;
 EXCEPTION WHEN OTHERS THEN
-  -- Log de erro silencioso para evitar travar o Auth
+  -- Se falhar a inserção de metadados, tenta inserir apenas o perfil básico
+  -- Isso evita o erro 422 que impede a criação do usuário no Auth
+  INSERT INTO public.profiles (id, name, email)
+  VALUES (new.id, COALESCE(new.raw_user_meta_data->>'name', 'Novo Usuário'), new.email);
+  
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 4. RE-CRIAR O GATILHO
+-- 3. RE-CRIAR O GATILHO
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- 5. HABILITAR RLS (Segurança)
+-- 4. HABILITAR RLS (Segurança)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Acesso público aos perfis" ON public.profiles;
 CREATE POLICY "Acesso público aos perfis" ON public.profiles FOR SELECT USING (true);

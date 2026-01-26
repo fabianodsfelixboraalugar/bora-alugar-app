@@ -46,11 +46,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchUsers = async () => {
     try {
-      const { data, error, status } = await supabase.from('profiles').select('*');
-      if (error) {
-        if (error.code === 'PGRST301' || status === 401) return;
-        throw error;
-      }
+      const { data, error } = await supabase.from('profiles').select('*');
+      if (error) throw error;
       if (data) setAllUsers(data.map(mapProfile));
     } catch (e) {
       console.warn("Aviso ao buscar perfis:", e);
@@ -60,22 +57,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          if (sessionError.status === 401 || sessionError.status === 400) {
-            await supabase.auth.signOut();
-          }
-        }
-
+        const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-          if (profile) {
-            setUser(mapProfile(profile));
-          }
+          if (profile) setUser(mapProfile(profile));
         }
       } catch (e) {
-        console.warn("Auth initialization warning:", e);
+        console.warn("Erro init auth:", e);
       } finally {
         await fetchUsers();
         setIsLoading(false);
@@ -91,7 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
         if (profile) setUser(mapProfile(profile));
       }
-      await fetchUsers();
+      fetchUsers();
     });
     
     return () => subscription.unsubscribe();
@@ -100,20 +88,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string): Promise<{success: boolean, message?: string}> => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      
       if (error) {
         if (error.message.includes("Email not confirmed")) {
-          return { success: false, message: "⚠️ E-mail não confirmado! Verifique sua caixa de entrada e clique no link de ativação." };
+          return { success: false, message: "⚠️ E-mail não confirmado! Verifique sua caixa de entrada." };
         }
-        if (error.status === 429) {
-          return { success: false, message: "⚠️ Muitas tentativas! Por favor, aguarde 60 segundos." };
-        }
-        return { success: false, message: error.message || "E-mail ou senha incorretos." };
+        return { success: false, message: "E-mail ou senha incorretos." };
       }
-      
       return { success: !!data.user };
     } catch (e) {
-      return { success: false, message: "Erro inesperado ao tentar entrar." };
+      return { success: false, message: "Erro ao tentar entrar." };
     }
   };
 
@@ -133,17 +116,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    if (authError) {
-      if (authError.status === 429) {
-        throw new Error("MUITAS TENTATIVAS: O servidor bloqueou temporariamente. Aguarde 60 segundos.");
-      }
-      if (authError.status === 422) {
-        throw new Error("ERRO DE VALIDAÇÃO: Verifique se todos os campos estão corretos ou se o e-mail já existe.");
-      }
-      throw authError;
-    }
-    
-    await fetchUsers();
+    if (authError) throw authError;
+    // Não damos fetchUsers aqui para evitar travar a UI se o banco demorar a propagar o trigger
   };
 
   const logout = async () => {
@@ -153,12 +127,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateUser = async (data: Partial<User>) => {
     if (!user) return;
-    const dbData: any = {};
-    if (data.name) dbData.name = data.name;
-    if (data.avatar) dbData.avatar = data.avatar;
-    if (data.city) dbData.city = data.city;
-    
-    await supabase.from('profiles').update(dbData).eq('id', user.id);
+    await supabase.from('profiles').update(data as any).eq('id', user.id);
     await fetchUsers();
   };
 
