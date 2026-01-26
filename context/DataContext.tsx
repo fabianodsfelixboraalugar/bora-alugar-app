@@ -54,11 +54,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchData = async () => {
     try {
       const [
-        { data: itemsRaw, error: itemsError },
-        { data: rentalsRaw, error: rentalsError },
-        { data: notificationsRaw, error: notificationsError },
-        { data: messagesRaw, error: messagesError },
-        { data: reviewsRaw, error: reviewsError }
+        { data: itemsRaw },
+        { data: rentalsRaw },
+        { data: notificationsRaw },
+        { data: messagesRaw },
+        { data: reviewsRaw }
       ] = await Promise.all([
         supabase.from('items').select('*').order('created_at', { ascending: false }),
         supabase.from('rentals').select('*').order('created_at', { ascending: false }),
@@ -66,9 +66,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         supabase.from('messages').select('*').order('timestamp', { ascending: true }),
         supabase.from('reviews').select('*').order('date', { ascending: false })
       ]);
-
-      if (itemsError) console.error("Erro busca items:", itemsError);
-      if (rentalsError) console.error("Erro busca rentals:", rentalsError);
 
       setItems((itemsRaw?.map((i: any) => ({
         ...i,
@@ -121,8 +118,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setNetworkError(false);
     } catch (error: any) {
-      console.error("Erro fatal DataContext:", error);
-      setNetworkError(true);
+      console.error("Erro ao sincronizar dados:", error);
+      // Não marca erro de rede se já tivermos alguns dados, apenas avisa
+      if (items.length === 0) setNetworkError(true);
     } finally {
       setIsLoading(false);
     }

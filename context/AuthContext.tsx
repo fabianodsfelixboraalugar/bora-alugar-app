@@ -9,7 +9,7 @@ interface AuthContextType {
   allUsers: User[];
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{success: boolean, message?: string}>;
-  register: (data: any) => Promise<void>;
+  register: (data: any) => Promise<{success: boolean, needsConfirmation: boolean, message?: string}>;
   logout: () => void;
   updateUser: (data: Partial<User>) => Promise<void>;
   deleteUser: (userId: string) => Promise<void>;
@@ -55,87 +55,77 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
       if (data) setAllUsers(data.map(p => mapProfile(p)));
     } catch (e) {
-      console.warn("Erro ao buscar perfis:", e);
+      console.warn("Aviso: Falha ao sincronizar lista de perfis.");
     }
-  };
-
-  const createMissingProfile = async (authUser: any) => {
-    // Tenta criar o perfil manualmente se o trigger falhar ou atrasar
-    const meta = authUser.user_metadata || {};
-    const profileData = {
-      id: authUser.id,
-      name: meta.name || 'Usuário',
-      email: authUser.email,
-      user_type: meta.user_type || 'Pessoa Física',
-      city: meta.city || '',
-      state: meta.state || '',
-      zip_code: meta.zip_code || ''
-    };
-    
-    await supabase.from('profiles').upsert(profileData);
-    const { data: profile } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
-    return profile;
   };
 
   const fetchProfile = async (userId: string, authUser?: any) => {
     try {
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-      
       if (profile) {
         setUser(mapProfile(profile, authUser));
       } else if (authUser) {
-        // Tenta criar o perfil se ele não existe (Safety Net)
-        const newProfile = await createMissingProfile(authUser);
-        if (newProfile) setUser(mapProfile(newProfile, authUser));
-        else setUser(mapProfile({ id: userId }, authUser));
+        setUser(mapProfile({ id: userId }, authUser));
       }
     } catch (e) {
       console.error("Erro ao carregar perfil:", e);
-      if (authUser) setUser(mapProfile({ id: userId }, authUser));
     }
   };
 
   useEffect(() => {
+    let mounted = true;
+
     const initAuth = async () => {
-      setIsLoading(true);
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
+        if (session?.user && mounted) {
           await fetchProfile(session.user.id, session.user);
         }
       } catch (e) {
-        console.warn("Erro init auth:", e);
+        console.error("Erro ao verificar sessão inicial:", e);
       } finally {
-        await fetchUsers();
-        setIsLoading(false);
+        if (mounted) {
+          await fetchUsers();
+          setIsLoading(false); // GARANTIA DE FINALIZAÇÃO
+        }
       }
     };
+
     initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+
       if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
         if (session?.user) {
           setIsLoading(true);
-          await fetchProfile(session.user.id, session.user);
-          await fetchUsers();
-          setIsLoading(false);
+          try {
+            await fetchProfile(session.user.id, session.user);
+            await fetchUsers();
+          } finally {
+            setIsLoading(false);
+          }
         }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
-        setAllUsers([]);
+        setIsLoading(false);
+      } else {
+        // Para outros eventos (como INITIAL_SESSION sem usuário), encerramos o loading
         setIsLoading(false);
       }
     });
     
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [mapProfile]);
 
   const login = async (email: string, password: string) => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        setIsLoading(false);
         if (error.message.includes("Email not confirmed")) {
           return { success: false, message: "⚠️ E-mail não confirmado! Verifique sua caixa de entrada." };
         }
@@ -143,32 +133,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return { success: !!data.user };
     } catch (e) {
-      setIsLoading(false);
       return { success: false, message: "Erro ao tentar entrar." };
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const register = async (data: any) => {
-    const { error: authError } = await supabase.auth.signUp({
-      email: data.email,
-      password: data.password,
-      options: {
-        data: {
-          name: data.name,
-          user_type: data.userType,
-          tax_id: data.taxId,
-          zip_code: data.zipCode,
-          city: data.city,
-          state: data.state
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: data.email,
+        password: data.password,
+        options: {
+          data: {
+            name: data.name,
+            user_type: data.userType,
+            tax_id: data.taxId,
+            zip_code: data.zipCode,
+            city: data.city,
+            state: data.state
+          }
         }
-      }
-    });
-    if (authError) throw authError;
+      });
+
+      if (authError) throw authError;
+
+      // Se não houver sessão mas houver usuário, significa que precisa confirmar e-mail
+      const needsConfirmation = !authData.session && !!authData.user;
+      
+      return { 
+        success: true, 
+        needsConfirmation,
+        message: needsConfirmation ? "Verifique seu e-mail para ativar sua conta." : "Cadastro realizado com sucesso!"
+      };
+    } catch (err: any) {
+      return { 
+        success: false, 
+        needsConfirmation: false, 
+        message: err.message || "Erro ao realizar cadastro." 
+      };
+    }
   };
 
   const logout = async () => {
     setIsLoading(true);
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      setUser(null);
+      setIsLoading(false);
+    }
   };
 
   const updateUser = async (data: Partial<User>) => {

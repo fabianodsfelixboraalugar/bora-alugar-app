@@ -67,11 +67,20 @@ const AppContent: React.FC = () => {
     return <ConfigErrorScreen type="network" />;
   }
 
+  // Só mostra a tela de carregamento total se estivermos validando a identidade/sessão inicial
+  // Após isso, permitimos que a UI carregue enquanto os dados (mensagens, itens) sincronizam em segundo plano.
+  const showFullSplash = isAuthLoading;
+
   return (
     <div className="flex flex-col min-h-screen font-sans text-gray-800">
-      {(isAuthLoading || isDataLoading) && <LoadingScreen />}
+      {showFullSplash && <LoadingScreen />}
       <Navbar />
       <main className="flex-grow">
+        {isDataLoading && !showFullSplash && (
+          <div className="h-1 bg-brand-100 overflow-hidden">
+            <div className="h-full bg-brand-500 animate-[progress_2s_ease-in-out_infinite] w-1/3"></div>
+          </div>
+        )}
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/search" element={<Search />} />

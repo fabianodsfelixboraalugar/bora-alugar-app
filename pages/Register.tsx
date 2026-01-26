@@ -26,6 +26,7 @@ export const Register: React.FC = () => {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false); // Novo estado para sucesso
   const [isLoadingCep, setIsLoadingCep] = useState(false);
   const [retryTimer, setRetryTimer] = useState(0);
   
@@ -100,31 +101,60 @@ export const Register: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      await register({ ...formData });
-      showToast("Cadastro realizado! Verifique seu e-mail.", 'success');
-      navigate('/login');
-    } catch (err: any) {
-      // Captura erro de usuário já registrado (422) ou outros erros de API
-      const errorMessage = err.message || "";
-      console.error("Erro capturado no Register:", err);
-
-      if (errorMessage.includes('User already registered') || err.status === 422) {
-        showToast("Este e-mail já está cadastrado. Tente fazer login.", 'error');
-        setTimeout(() => navigate('/login'), 2000);
-      } else if (err.status === 429) {
-        showToast("Muitas tentativas. Aguarde 60 segundos.", 'error');
-        setRetryTimer(60);
+      const result = await register({ ...formData });
+      
+      if (result.success) {
+        if (result.needsConfirmation) {
+          setIsRegistered(true);
+          showToast("Cadastro quase pronto! Verifique seu e-mail.", 'info');
+        } else {
+          showToast("Cadastro realizado com sucesso!", 'success');
+          navigate('/login');
+        }
       } else {
-        showToast(errorMessage || "Erro ao criar conta. Tente novamente.", 'error');
+        const msg = result.message || "";
+        if (msg.includes('already registered')) {
+          showToast("Este e-mail já está cadastrado. Tente fazer login.", 'error');
+          setTimeout(() => navigate('/login'), 2000);
+        } else {
+          showToast(msg || "Erro ao criar conta.", 'error');
+        }
       }
+    } catch (err: any) {
+      showToast("Falha na comunicação com o servidor.", 'error');
     } finally {
-      // Pequeno delay para garantir que o spinner pare visivelmente antes de qualquer ação
-      setTimeout(() => setIsSubmitting(false), 500);
+      setIsSubmitting(false);
     }
   };
 
   const inputStyle = "w-full bg-white border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-brand-500 text-gray-800 transition-all text-sm font-medium shadow-sm";
   const labelStyle = "block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1";
+
+  // VIEW DE SUCESSO (E-MAIL PENDENTE)
+  if (isRegistered) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4 py-12">
+        <div className="max-w-md w-full bg-white rounded-[3.5rem] shadow-2xl p-12 border border-brand-100 text-center animate-fadeIn">
+          <div className="w-24 h-24 bg-brand-50 rounded-full flex items-center justify-center mx-auto mb-8 border-2 border-brand-100 shadow-inner">
+            <i className="fas fa-paper-plane text-brand-500 text-4xl animate-bounce"></i>
+          </div>
+          <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight mb-4">Verifique seu E-mail</h2>
+          <p className="text-gray-500 text-sm font-medium leading-relaxed mb-8">
+            Enviamos um link de ativação para <br/><span className="text-brand-600 font-bold">{formData.email}</span>.<br/> 
+            Acesse sua caixa de entrada para liberar seu acesso ao Bora Alugar.
+          </p>
+          <div className="space-y-4">
+            <Link to="/login" className="block w-full bg-brand-500 text-white font-black py-5 rounded-[2rem] shadow-xl hover:bg-brand-600 transition transform active:scale-95 uppercase text-xs tracking-widest">
+              Ir para o Login
+            </Link>
+            <button onClick={() => window.location.reload()} className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-brand-600 transition">
+              Não recebeu? Tentar novamente
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4 py-12">
