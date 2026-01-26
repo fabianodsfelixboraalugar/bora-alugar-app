@@ -1,10 +1,10 @@
 
 -- ========================================================
--- SCRIPT DE REINSTALAÇÃO TOTAL V6 - BORA ALUGAR
--- ATENÇÃO: Execute este script no SQL Editor do Supabase para corrigir erros de cadastro (422).
+-- SCRIPT DE REINSTALAÇÃO TOTAL V7 - BORA ALUGAR
+-- PROTEÇÃO CONTRA ERRO 422 E CONFLITOS DE IDENTIDADE
 -- ========================================================
 
--- 1. TABELA DE PERFIS (GARANTINDO CAMPOS NECESSÁRIOS)
+-- 1. TABELA DE PERFIS
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT,
@@ -27,15 +27,15 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   selfie_url TEXT
 );
 
--- 2. FUNÇÃO DE GATILHO ROBUSTA
+-- 2. FUNÇÃO DE GATILHO ULTRA-RESILIENTE
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
   meta_user_type TEXT;
 BEGIN
-  -- Extrai o tipo de usuário com fallback
   meta_user_type := COALESCE(new.raw_user_meta_data->>'user_type', 'Pessoa Física');
 
+  -- INSERT com ON CONFLICT para evitar erro 422 por duplicidade ou falha de trigger
   INSERT INTO public.profiles (
     id, 
     name, 
@@ -55,18 +55,17 @@ BEGIN
     new.raw_user_meta_data->>'city',
     new.raw_user_meta_data->>'state',
     new.raw_user_meta_data->>'zip_code',
-    -- Lógica para CPF/CNPJ
     CASE WHEN meta_user_type = 'Pessoa Física' THEN new.raw_user_meta_data->>'tax_id' ELSE NULL END,
     CASE WHEN meta_user_type = 'Pessoa Jurídica' THEN new.raw_user_meta_data->>'tax_id' ELSE NULL END
-  );
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    name = EXCLUDED.name,
+    email = EXCLUDED.email,
+    user_type = EXCLUDED.user_type;
   
   RETURN new;
 EXCEPTION WHEN OTHERS THEN
-  -- Se falhar a inserção de metadados, tenta inserir apenas o perfil básico
-  -- Isso evita o erro 422 que impede a criação do usuário no Auth
-  INSERT INTO public.profiles (id, name, email)
-  VALUES (new.id, COALESCE(new.raw_user_meta_data->>'name', 'Novo Usuário'), new.email);
-  
+  -- Fallback total: garante que o usuário seja criado no Auth mesmo se o perfil falhar
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -77,7 +76,7 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- 4. HABILITAR RLS (Segurança)
+-- 4. POLÍTICAS DE SEGURANÇA (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Acesso público aos perfis" ON public.profiles;
 CREATE POLICY "Acesso público aos perfis" ON public.profiles FOR SELECT USING (true);

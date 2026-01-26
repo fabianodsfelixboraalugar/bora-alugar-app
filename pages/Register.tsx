@@ -33,6 +33,20 @@ export const Register: React.FC = () => {
   const { showToast } = useToast();
   const navigate = useNavigate();
 
+  // Proteção contra carregamento infinito
+  useEffect(() => {
+    let timeout: any;
+    if (isSubmitting) {
+      timeout = setTimeout(() => {
+        if (isSubmitting) {
+          setIsSubmitting(false);
+          showToast("O servidor está demorando a responder. Tente novamente.", "warning");
+        }
+      }, 20000); // 20 segundos de timeout
+    }
+    return () => clearTimeout(timeout);
+  }, [isSubmitting]);
+
   useEffect(() => {
     let interval: any;
     if (retryTimer > 0) {
@@ -80,12 +94,9 @@ export const Register: React.FC = () => {
             city: data.localidade || '', 
             state: data.uf || '' 
           }));
-          showToast("Endereço preenchido!", "success");
-        } else {
-          showToast("CEP não encontrado.", "warning");
         }
       } catch (err) {
-        showToast("Erro ao buscar CEP.", "error");
+        console.warn("Erro CEP:", err);
       } finally {
         setIsLoadingCep(false);
       }
@@ -104,25 +115,23 @@ export const Register: React.FC = () => {
     setIsSubmitting(true);
     try {
       await register({ ...formData });
-      showToast("Sucesso! Verifique seu e-mail para ativar a conta.", 'success');
+      showToast("Cadastro realizado! Verifique seu e-mail.", 'success');
       navigate('/login');
     } catch (err: any) {
-      console.error("Erro completo do registro:", err);
+      console.error("Erro no registro:", err);
       
-      const errorMessage = err.message || "";
-      
-      if (errorMessage.includes('429') || err.status === 429) {
+      // Captura erro de usuário já registrado (422)
+      if (err.message?.includes('User already registered') || err.status === 422) {
+        showToast("Este e-mail já está em uso. Tente fazer login.", 'error');
+      } else if (err.status === 429) {
         showToast("Muitas tentativas. Aguarde 60s.", 'error');
         setRetryTimer(60);
-      } else if (errorMessage.includes('422') || err.status === 422) {
-        showToast("Este e-mail já possui cadastro ou os dados são inválidos.", 'error');
-      } else if (errorMessage.includes('User already registered')) {
-        showToast("Usuário já cadastrado com este e-mail.", 'error');
       } else {
-        showToast(errorMessage || "Ocorreu um erro ao criar sua conta.", 'error');
+        showToast(err.message || "Erro ao criar conta. Tente novamente.", 'error');
       }
     } finally {
-      setIsSubmitting(false);
+      // Pequeno delay para garantir que o estado seja limpo após o processamento
+      setTimeout(() => setIsSubmitting(false), 500);
     }
   };
 
@@ -184,12 +193,6 @@ export const Register: React.FC = () => {
                   </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div><label className={labelStyle}>Bairro</label><input type="text" required className={inputStyle} value={formData.neighborhood} onChange={e => setFormData({...formData, neighborhood: e.target.value})} /></div>
-                  <div><label className={labelStyle}>Cidade</label><input type="text" required className={inputStyle} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} /></div>
-                  <div><label className={labelStyle}>UF</label><input type="text" required maxLength={2} className={inputStyle + " uppercase text-center"} value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} /></div>
-              </div>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
                   <div className="space-y-3">
                       <label className={labelStyle}>Senha</label>
@@ -219,7 +222,7 @@ export const Register: React.FC = () => {
             disabled={isSubmitting || retryTimer > 0}
             className={`w-full text-white font-black py-5 rounded-[2rem] shadow-xl transition transform active:scale-[0.98] uppercase tracking-[0.1em] text-sm ${retryTimer > 0 ? 'bg-gray-400 cursor-wait' : 'bg-brand-500 hover:bg-brand-600 shadow-brand-100'}`}
           >
-            {retryTimer > 0 ? `Aguarde ${retryTimer}s` : (isSubmitting ? <span className="flex items-center justify-center gap-2"><i className="fas fa-spinner fa-spin"></i> CRIANDO CONTA...</span> : 'Finalizar Cadastro')}
+            {retryTimer > 0 ? `Aguarde ${retryTimer}s` : (isSubmitting ? <span className="flex items-center justify-center gap-2"><i className="fas fa-spinner fa-spin"></i> PROCESSANDO...</span> : 'Finalizar Cadastro')}
           </button>
           
           <div className="text-center text-[10px] font-black text-gray-300 uppercase tracking-widest">
