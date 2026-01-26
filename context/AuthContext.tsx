@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { User, UserType, UserPlan, VerificationStatus, UserRole } from '../types';
 
@@ -34,20 +34,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const mapProfile = (p: any, authUser?: any): User => ({
+  const mapProfile = useCallback((p: any, authUser?: any): User => ({
     ...p,
     id: p.id || authUser?.id,
     name: p.name || authUser?.user_metadata?.name || 'Usuário',
     email: p.email || authUser?.email,
     userType: p.user_type || authUser?.user_metadata?.user_type || 'Pessoa Física',
-    zipCode: p.zip_code,
+    zipCode: p.zip_code || authUser?.user_metadata?.zip_code,
     joinedDate: p.joined_date || new Date().toISOString(),
     verificationStatus: p.verification_status || 'Não Iniciado',
     isActive: p.is_active ?? true,
     plan: p.plan || 'Gratuito',
     role: p.role || 'USER',
-    trustStats: p.trust_stats || { score: 50, level: 'NEUTRAL' }
-  });
+    trustStats: p.trust_stats || { score: 50, level: 'NEUTRAL', completedTransactions: 0, cancellations: 0, avgRatingAsOwner: 5, countRatingAsOwner: 0, avgRatingAsRenter: 5, countRatingAsRenter: 0 }
+  }), []);
 
   const fetchUsers = async () => {
     try {
@@ -59,27 +59,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const createMissingProfile = async (authUser: any) => {
+    // Tenta criar o perfil manualmente se o trigger falhar ou atrasar
+    const meta = authUser.user_metadata || {};
+    const profileData = {
+      id: authUser.id,
+      name: meta.name || 'Usuário',
+      email: authUser.email,
+      user_type: meta.user_type || 'Pessoa Física',
+      city: meta.city || '',
+      state: meta.state || '',
+      zip_code: meta.zip_code || ''
+    };
+    
+    await supabase.from('profiles').upsert(profileData);
+    const { data: profile } = await supabase.from('profiles').select('*').eq('id', authUser.id).single();
+    return profile;
+  };
+
   const fetchProfile = async (userId: string, authUser?: any) => {
     try {
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
       
       if (profile) {
         setUser(mapProfile(profile, authUser));
       } else if (authUser) {
-        // Fallback para quando o trigger do banco de dados ainda não criou o perfil
-        setUser(mapProfile({ id: userId }, authUser));
+        // Tenta criar o perfil se ele não existe (Safety Net)
+        const newProfile = await createMissingProfile(authUser);
+        if (newProfile) setUser(mapProfile(newProfile, authUser));
+        else setUser(mapProfile({ id: userId }, authUser));
       }
     } catch (e) {
       console.error("Erro ao carregar perfil:", e);
+      if (authUser) setUser(mapProfile({ id: userId }, authUser));
     }
   };
 
   useEffect(() => {
     const initAuth = async () => {
+      setIsLoading(true);
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
@@ -95,31 +113,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT') {
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        if (session?.user) {
+          setIsLoading(true);
+          await fetchProfile(session.user.id, session.user);
+          await fetchUsers();
+          setIsLoading(false);
+        }
+      } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setAllUsers([]);
-      } else if (session?.user) {
-        await fetchProfile(session.user.id, session.user);
-        await fetchUsers();
+        setIsLoading(false);
       }
     });
     
     return () => subscription.unsubscribe();
-  }, []);
+  }, [mapProfile]);
 
-  const login = async (email: string, password: string): Promise<{success: boolean, message?: string}> => {
+  const login = async (email: string, password: string) => {
     try {
+      setIsLoading(true);
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
+        setIsLoading(false);
         if (error.message.includes("Email not confirmed")) {
           return { success: false, message: "⚠️ E-mail não confirmado! Verifique sua caixa de entrada." };
         }
-        if (error.status === 400) return { success: false, message: "E-mail ou senha incorretos." };
-        return { success: false, message: error.message };
+        return { success: false, message: "E-mail ou senha incorretos." };
       }
       return { success: !!data.user };
     } catch (e) {
-      return { success: false, message: "Erro ao tentar entrar na conta." };
+      setIsLoading(false);
+      return { success: false, message: "Erro ao tentar entrar." };
     }
   };
 
@@ -138,13 +163,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
     });
-
     if (authError) throw authError;
   };
 
   const logout = async () => {
+    setIsLoading(true);
     await supabase.auth.signOut();
-    setUser(null);
   };
 
   const updateUser = async (data: Partial<User>) => {
@@ -152,7 +176,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { error } = await supabase.from('profiles').update(data as any).eq('id', user.id);
     if (error) throw error;
     await fetchProfile(user.id);
-    await fetchUsers();
   };
 
   const deleteUser = async (userId: string) => {
@@ -173,7 +196,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       selfie_url: self
     }).eq('id', user.id);
     await fetchProfile(user.id);
-    await fetchUsers();
   };
 
   const adminApproveKYC = async (uid: string) => {
@@ -207,14 +229,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const plan = valor > 10 ? UserPlan.PREMIUM : UserPlan.BASIC;
     await supabase.from('profiles').update({ plan }).eq('id', user.id);
     await fetchProfile(user.id);
-    await fetchUsers();
   };
 
   const cancelarAssinatura = async () => {
     if (!user) return;
     await supabase.from('profiles').update({ plan: UserPlan.FREE }).eq('id', user.id);
     await fetchProfile(user.id);
-    await fetchUsers();
   };
 
   const isValidTaxId = (taxId: string, type: UserType) => {

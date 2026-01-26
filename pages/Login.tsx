@@ -62,11 +62,15 @@ export const Login: React.FC = () => {
         navigate('/dashboard');
       } else {
         showToast(result.message || "E-mail ou senha incorretos.", 'error');
+        setIsSubmitting(false);
       }
     } catch (err: any) {
-      showToast("Ocorreu um erro ao tentar entrar. Tente novamente.", "error");
-    } finally {
+      console.error("Login Error:", err);
+      showToast("Erro ao tentar entrar. Tente novamente.", "error");
       setIsSubmitting(false);
+    } finally {
+      // O estado de submissão é limpo em caso de falha. 
+      // Em caso de sucesso, o redirecionamento trata o componente.
     }
   };
 

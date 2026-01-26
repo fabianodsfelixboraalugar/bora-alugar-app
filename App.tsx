@@ -23,6 +23,17 @@ import { CookiePolicy } from './pages/CookiePolicy';
 import { InstallPwaNotification } from './components/InstallPwaNotification';
 import { CookieConsent } from './components/CookieConsent';
 import { isSupabaseConfigured } from './lib/supabase';
+import { Logo } from './components/Logo';
+
+const LoadingScreen: React.FC = () => (
+  <div className="fixed inset-0 bg-white z-[999] flex flex-col items-center justify-center p-6 animate-fadeIn">
+    <div className="flex flex-col items-center">
+      <Logo className="h-24 mb-8 animate-pulse" />
+      <div className="w-12 h-12 border-4 border-brand-100 border-t-brand-500 rounded-full animate-spin"></div>
+      <p className="mt-6 text-gray-400 font-black text-[10px] uppercase tracking-[0.3em] animate-pulse">Sincronizando...</p>
+    </div>
+  </div>
+);
 
 const ConfigErrorScreen: React.FC<{ type?: 'config' | 'network' }> = ({ type = 'config' }) => (
   <div className="min-h-screen bg-brand-900 flex items-center justify-center p-6 text-center">
@@ -49,7 +60,8 @@ const ConfigErrorScreen: React.FC<{ type?: 'config' | 'network' }> = ({ type = '
 );
 
 const AppContent: React.FC = () => {
-  const { networkError } = useData();
+  const { networkError, isLoading: isDataLoading } = useData();
+  const { isLoading: isAuthLoading } = useAuth();
 
   if (networkError) {
     return <ConfigErrorScreen type="network" />;
@@ -57,6 +69,7 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-screen font-sans text-gray-800">
+      {(isAuthLoading || isDataLoading) && <LoadingScreen />}
       <Navbar />
       <main className="flex-grow">
         <Routes>
@@ -102,7 +115,8 @@ const AppContent: React.FC = () => {
 };
 
 const AdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return null;
   if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
   const isAuthorized = user.isActive !== false && (user.role === 'ADMIN' || !!user.jobTitle || user.id.startsWith('colab_'));
   if (!isAuthorized) return <Navigate to="/" replace />;
