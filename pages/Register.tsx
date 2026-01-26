@@ -104,15 +104,13 @@ export const Register: React.FC = () => {
       showToast("Cadastro realizado! Verifique seu e-mail.", 'success');
       navigate('/login');
     } catch (err: any) {
-      setIsSubmitting(false); // Cancela o carregamento IMEDIATAMENTE em caso de erro
-      
+      // Captura erro de usuário já registrado (422) ou outros erros de API
       const errorMessage = err.message || "";
       console.error("Erro capturado no Register:", err);
 
       if (errorMessage.includes('User already registered') || err.status === 422) {
         showToast("Este e-mail já está cadastrado. Tente fazer login.", 'error');
-        // Opcional: Redirecionar para login após 3 segundos
-        setTimeout(() => navigate('/login'), 3000);
+        setTimeout(() => navigate('/login'), 2000);
       } else if (err.status === 429) {
         showToast("Muitas tentativas. Aguarde 60 segundos.", 'error');
         setRetryTimer(60);
@@ -120,8 +118,8 @@ export const Register: React.FC = () => {
         showToast(errorMessage || "Erro ao criar conta. Tente novamente.", 'error');
       }
     } finally {
-      // Garantia final de que o carregamento pare
-      setIsSubmitting(false);
+      // Pequeno delay para garantir que o spinner pare visivelmente antes de qualquer ação
+      setTimeout(() => setIsSubmitting(false), 500);
     }
   };
 
@@ -201,7 +199,7 @@ export const Register: React.FC = () => {
             disabled={isSubmitting || retryTimer > 0}
             className={`w-full text-white font-black py-5 rounded-[2rem] shadow-xl transition transform active:scale-[0.98] uppercase tracking-[0.1em] text-sm ${retryTimer > 0 ? 'bg-gray-400 cursor-wait' : 'bg-brand-500 hover:bg-brand-600 shadow-brand-100'}`}
           >
-            {retryTimer > 0 ? `Aguarde ${retryTimer}s` : (isSubmitting ? <span className="flex items-center justify-center gap-2"><i className="fas fa-spinner fa-spin"></i> PROCESSANDO...</span> : 'Finalizar Cadastro')}
+            {retryTimer > 0 ? `Aguarde ${retryTimer}s` : (isSubmitting ? <span className="flex items-center justify-center gap-2"><i className="fas fa-spinner fa-spin mr-2"></i> PROCESSANDO...</span> : 'Finalizar Cadastro')}
           </button>
           
           <div className="text-center text-[10px] font-black text-gray-300 uppercase tracking-widest">

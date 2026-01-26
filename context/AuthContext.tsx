@@ -34,13 +34,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const mapProfile = (p: any): User => ({
+  const mapProfile = (p: any, authUser?: any): User => ({
     ...p,
-    userType: p.user_type || 'Pessoa Física',
+    id: p.id || authUser?.id,
+    name: p.name || authUser?.user_metadata?.name || 'Usuário',
+    email: p.email || authUser?.email,
+    userType: p.user_type || authUser?.user_metadata?.user_type || 'Pessoa Física',
     zipCode: p.zip_code,
-    joinedDate: p.joined_date,
+    joinedDate: p.joined_date || new Date().toISOString(),
     verificationStatus: p.verification_status || 'Não Iniciado',
     isActive: p.is_active ?? true,
+    plan: p.plan || 'Gratuito',
+    role: p.role || 'USER',
     trustStats: p.trust_stats || { score: 50, level: 'NEUTRAL' }
   });
 
@@ -48,9 +53,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { data, error } = await supabase.from('profiles').select('*');
       if (error) throw error;
-      if (data) setAllUsers(data.map(mapProfile));
+      if (data) setAllUsers(data.map(p => mapProfile(p)));
     } catch (e) {
-      console.warn("Aviso ao buscar perfis:", e);
+      console.warn("Erro ao buscar perfis:", e);
+    }
+  };
+
+  const fetchProfile = async (userId: string, authUser?: any) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+      
+      if (profile) {
+        setUser(mapProfile(profile, authUser));
+      } else if (authUser) {
+        // Fallback para quando o trigger do banco de dados ainda não criou o perfil
+        setUser(mapProfile({ id: userId }, authUser));
+      }
+    } catch (e) {
+      console.error("Erro ao carregar perfil:", e);
     }
   };
 
@@ -59,8 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-          if (profile) setUser(mapProfile(profile));
+          await fetchProfile(session.user.id, session.user);
         }
       } catch (e) {
         console.warn("Erro init auth:", e);
@@ -76,10 +99,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
         setAllUsers([]);
       } else if (session?.user) {
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-        if (profile) setUser(mapProfile(profile));
+        await fetchProfile(session.user.id, session.user);
+        await fetchUsers();
       }
-      fetchUsers();
     });
     
     return () => subscription.unsubscribe();
@@ -92,11 +114,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (error.message.includes("Email not confirmed")) {
           return { success: false, message: "⚠️ E-mail não confirmado! Verifique sua caixa de entrada." };
         }
-        return { success: false, message: "E-mail ou senha incorretos." };
+        if (error.status === 400) return { success: false, message: "E-mail ou senha incorretos." };
+        return { success: false, message: error.message };
       }
       return { success: !!data.user };
     } catch (e) {
-      return { success: false, message: "Erro ao tentar entrar." };
+      return { success: false, message: "Erro ao tentar entrar na conta." };
     }
   };
 
@@ -117,7 +140,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     if (authError) throw authError;
-    // Não damos fetchUsers aqui para evitar travar a UI se o banco demorar a propagar o trigger
   };
 
   const logout = async () => {
@@ -127,12 +149,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateUser = async (data: Partial<User>) => {
     if (!user) return;
-    await supabase.from('profiles').update(data as any).eq('id', user.id);
+    const { error } = await supabase.from('profiles').update(data as any).eq('id', user.id);
+    if (error) throw error;
+    await fetchProfile(user.id);
     await fetchUsers();
   };
 
   const deleteUser = async (userId: string) => {
-    await supabase.from('profiles').delete().eq('id', userId);
+    const { error } = await supabase.from('profiles').delete().eq('id', userId);
+    if (error) throw error;
     await fetchUsers();
   };
 
@@ -147,6 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       document_url: doc,
       selfie_url: self
     }).eq('id', user.id);
+    await fetchProfile(user.id);
     await fetchUsers();
   };
 
@@ -180,12 +206,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     const plan = valor > 10 ? UserPlan.PREMIUM : UserPlan.BASIC;
     await supabase.from('profiles').update({ plan }).eq('id', user.id);
+    await fetchProfile(user.id);
     await fetchUsers();
   };
 
   const cancelarAssinatura = async () => {
     if (!user) return;
     await supabase.from('profiles').update({ plan: UserPlan.FREE }).eq('id', user.id);
+    await fetchProfile(user.id);
     await fetchUsers();
   };
 
