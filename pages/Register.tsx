@@ -33,20 +33,6 @@ export const Register: React.FC = () => {
   const { showToast } = useToast();
   const navigate = useNavigate();
 
-  // Proteção contra carregamento infinito
-  useEffect(() => {
-    let timeout: any;
-    if (isSubmitting) {
-      timeout = setTimeout(() => {
-        if (isSubmitting) {
-          setIsSubmitting(false);
-          showToast("O servidor está demorando a responder. Tente novamente.", "warning");
-        }
-      }, 20000); // 20 segundos de timeout
-    }
-    return () => clearTimeout(timeout);
-  }, [isSubmitting]);
-
   useEffect(() => {
     let interval: any;
     if (retryTimer > 0) {
@@ -96,7 +82,7 @@ export const Register: React.FC = () => {
           }));
         }
       } catch (err) {
-        console.warn("Erro CEP:", err);
+        console.warn("Erro ao buscar CEP");
       } finally {
         setIsLoadingCep(false);
       }
@@ -107,10 +93,10 @@ export const Register: React.FC = () => {
     e.preventDefault();
     if (retryTimer > 0 || isSubmitting) return;
     
-    if (!acceptedTerms) { showToast("Aceite os termos.", 'warning'); return; }
-    if (!isValidTaxId(formData.taxId, formData.userType)) { showToast("CPF/CNPJ inválido.", 'error'); return; }
-    if (!Object.values(passwordCriteria).every(Boolean)) { showToast("Senha muito fraca.", 'warning'); return; }
-    if (formData.password !== formData.confirmPassword) { showToast("As senhas não conferem.", 'error'); return; }
+    if (!acceptedTerms) { showToast("Aceite os termos para continuar.", 'warning'); return; }
+    if (!isValidTaxId(formData.taxId, formData.userType)) { showToast("Documento (CPF/CNPJ) inválido.", 'error'); return; }
+    if (!Object.values(passwordCriteria).every(Boolean)) { showToast("A senha deve ser mais forte.", 'warning'); return; }
+    if (formData.password !== formData.confirmPassword) { showToast("As senhas não coincidem.", 'error'); return; }
 
     setIsSubmitting(true);
     try {
@@ -118,24 +104,28 @@ export const Register: React.FC = () => {
       showToast("Cadastro realizado! Verifique seu e-mail.", 'success');
       navigate('/login');
     } catch (err: any) {
-      console.error("Erro no registro:", err);
+      setIsSubmitting(false); // Cancela o carregamento IMEDIATAMENTE em caso de erro
       
-      // Captura erro de usuário já registrado (422)
-      if (err.message?.includes('User already registered') || err.status === 422) {
-        showToast("Este e-mail já está em uso. Tente fazer login.", 'error');
+      const errorMessage = err.message || "";
+      console.error("Erro capturado no Register:", err);
+
+      if (errorMessage.includes('User already registered') || err.status === 422) {
+        showToast("Este e-mail já está cadastrado. Tente fazer login.", 'error');
+        // Opcional: Redirecionar para login após 3 segundos
+        setTimeout(() => navigate('/login'), 3000);
       } else if (err.status === 429) {
-        showToast("Muitas tentativas. Aguarde 60s.", 'error');
+        showToast("Muitas tentativas. Aguarde 60 segundos.", 'error');
         setRetryTimer(60);
       } else {
-        showToast(err.message || "Erro ao criar conta. Tente novamente.", 'error');
+        showToast(errorMessage || "Erro ao criar conta. Tente novamente.", 'error');
       }
     } finally {
-      // Pequeno delay para garantir que o estado seja limpo após o processamento
-      setTimeout(() => setIsSubmitting(false), 500);
+      // Garantia final de que o carregamento pare
+      setIsSubmitting(false);
     }
   };
 
-  const inputStyle = "w-full bg-white border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-brand-500 text-gray-800 transition-all text-sm font-medium";
+  const inputStyle = "w-full bg-white border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-brand-500 text-gray-800 transition-all text-sm font-medium shadow-sm";
   const labelStyle = "block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1";
 
   return (
@@ -147,7 +137,7 @@ export const Register: React.FC = () => {
       <div className="max-w-2xl w-full bg-white rounded-[3rem] shadow-xl p-10 border border-brand-100 animate-fadeIn">
         <div className="text-center mb-10">
           <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight">Criar Conta</h2>
-          <p className="text-gray-400 text-xs font-bold uppercase mt-2 tracking-widest">Junte-se à nossa comunidade</p>
+          <p className="text-gray-400 text-xs font-bold uppercase mt-2 tracking-widest">Junte-se à comunidade Bora Alugar</p>
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -160,36 +150,25 @@ export const Register: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                       <label className={labelStyle}>Nome Completo</label>
-                      <input name="fullname" type="text" required className={inputStyle} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                      <input type="text" required className={inputStyle} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                   </div>
                   <div>
                       <label className={labelStyle}>E-mail</label>
-                      <input name="email" type="email" required className={inputStyle} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                      <input type="email" required className={inputStyle} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
                   </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                       <label className={labelStyle}>{formData.userType === UserType.PF ? 'CPF' : 'CNPJ'}</label>
-                      <input name="taxid" type="text" required className={inputStyle} value={formData.taxId} onChange={e => setFormData({...formData, taxId: maskTaxId(e.target.value)})} />
+                      <input type="text" required className={inputStyle} value={formData.taxId} onChange={e => setFormData({...formData, taxId: maskTaxId(e.target.value)})} />
                   </div>
                   <div>
                       <label className={labelStyle}>CEP</label>
                       <div className="relative">
-                        <input name="zipcode" type="text" required className={inputStyle} value={formData.zipCode} onChange={handleZipCodeChange} placeholder="00000-000" />
+                        <input type="text" required className={inputStyle} value={formData.zipCode} onChange={handleZipCodeChange} placeholder="00000-000" />
                         {isLoadingCep && <i className="fas fa-spinner fa-spin absolute right-4 top-1/2 -translate-y-1/2 text-brand-500"></i>}
                       </div>
-                  </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="md:col-span-3">
-                      <label className={labelStyle}>Logradouro</label>
-                      <input name="address" type="text" required className={inputStyle} value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} />
-                  </div>
-                  <div>
-                      <label className={labelStyle}>Nº</label>
-                      <input name="number" type="text" required className={inputStyle} value={formData.addressNumber} onChange={e => setFormData({...formData, addressNumber: e.target.value})} />
                   </div>
               </div>
 
@@ -197,7 +176,7 @@ export const Register: React.FC = () => {
                   <div className="space-y-3">
                       <label className={labelStyle}>Senha</label>
                       <div className="relative">
-                        <input name="new-password" type={showPassword ? "text" : "password"} required className={inputStyle} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
+                        <input type={showPassword ? "text" : "password"} required className={inputStyle} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
                         <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-500 transition-colors">
                           <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
                         </button>
@@ -205,7 +184,7 @@ export const Register: React.FC = () => {
                   </div>
                   <div>
                       <label className={labelStyle}>Confirmar Senha</label>
-                      <input name="confirm-password" type="password" required className={inputStyle} value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} />
+                      <input type="password" required className={inputStyle} value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} />
                   </div>
               </div>
           </div>
