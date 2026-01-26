@@ -33,7 +33,6 @@ export const Register: React.FC = () => {
   const { showToast } = useToast();
   const navigate = useNavigate();
 
-  // Gerenciamento do Timer de Bloqueio (Erro 429)
   useEffect(() => {
     let interval: any;
     if (retryTimer > 0) {
@@ -105,16 +104,17 @@ export const Register: React.FC = () => {
     setIsSubmitting(true);
     try {
       await register({ ...formData });
-      showToast("Conta criada! Verifique seu e-mail.", 'success');
+      showToast("Conta criada! Verifique seu e-mail de ativação.", 'success');
       navigate('/login');
     } catch (err: any) {
+      console.error("Erro no registro:", err);
       if (err.message?.includes('429')) {
-        showToast("Muitas tentativas. Aguarde o contador no botão.", 'error');
+        showToast("Muitas tentativas. Aguarde 60 segundos.", 'error');
         setRetryTimer(60);
-      } else if (err.message?.includes('User already registered')) {
-        showToast("Este e-mail já está em uso.", 'error');
+      } else if (err.message?.includes('422')) {
+        showToast("Erro de validação. Verifique se o e-mail já existe.", 'error');
       } else {
-        showToast(err.message || "Erro ao criar conta.", 'error');
+        showToast(err.message || "Erro inesperado ao criar conta.", 'error');
       }
     } finally {
       setIsSubmitting(false);
@@ -140,18 +140,16 @@ export const Register: React.FC = () => {
       <div className="max-w-2xl w-full bg-white rounded-[3rem] shadow-xl p-10 border border-brand-100 animate-fadeIn">
         <div className="text-center mb-10">
           <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight">Criar Conta</h2>
-          <p className="text-gray-400 text-xs font-bold uppercase mt-2 tracking-widest">Junte-se à maior comunidade de aluguéis</p>
+          <p className="text-gray-400 text-xs font-bold uppercase mt-2 tracking-widest">Junte-se ao Bora Alugar</p>
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-6" id="register-form">
-          {/* Toggle PF/PJ */}
           <div className="grid grid-cols-2 gap-4 bg-gray-50 p-2 rounded-2xl">
               <button type="button" onClick={() => setFormData({...formData, userType: UserType.PF})} className={`py-3 rounded-xl font-black text-xs uppercase transition ${formData.userType === UserType.PF ? 'bg-brand-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>Pessoa Física</button>
               <button type="button" onClick={() => setFormData({...formData, userType: UserType.PJ})} className={`py-3 rounded-xl font-black text-xs uppercase transition ${formData.userType === UserType.PJ ? 'bg-brand-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>Pessoa Jurídica</button>
           </div>
 
           <div className="space-y-4">
-              {/* Nome e Email */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                       <label className={labelStyle}>Nome Completo</label>
@@ -163,7 +161,6 @@ export const Register: React.FC = () => {
                   </div>
               </div>
 
-              {/* Documento e CEP */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                       <label className={labelStyle}>{formData.userType === UserType.PF ? 'CPF' : 'CNPJ'}</label>
@@ -178,7 +175,6 @@ export const Register: React.FC = () => {
                   </div>
               </div>
 
-              {/* Endereço e Número */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="md:col-span-3">
                       <label className={labelStyle}>Logradouro (Rua/Av)</label>
@@ -190,7 +186,6 @@ export const Register: React.FC = () => {
                   </div>
               </div>
 
-              {/* Bairro, Cidade e Estado */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                       <label className={labelStyle}>Bairro</label>
@@ -201,12 +196,11 @@ export const Register: React.FC = () => {
                       <input name="city" type="text" required className={inputStyle} value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} />
                   </div>
                   <div>
-                      <label className={labelStyle}>Estado (UF)</label>
+                      <label className={labelStyle}>UF</label>
                       <input name="state" type="text" required maxLength={2} className={inputStyle + " uppercase text-center"} value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} />
                   </div>
               </div>
 
-              {/* Senhas e Critérios */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
                   <div className="space-y-3">
                       <label className={labelStyle}>Escolha uma Senha</label>
@@ -243,14 +237,14 @@ export const Register: React.FC = () => {
           <div className="flex items-start gap-3 p-2 bg-gray-50 rounded-2xl border border-gray-100">
             <input id="accept-terms-reg" type="checkbox" checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} className="mt-1 w-5 h-5 text-brand-600 rounded cursor-pointer" />
             <label htmlFor="accept-terms-reg" className="text-[10px] text-gray-400 font-black uppercase leading-relaxed cursor-pointer select-none">
-              Li e concordo com os Termos de Uso e Política de Privacidade da plataforma Bora Alugar.
+              Li e concordo com os Termos e Políticas de Privacidade.
             </label>
           </div>
 
           <button 
             type="submit" 
             disabled={isSubmitting || retryTimer > 0}
-            className={`w-full text-white font-black py-5 rounded-[2rem] shadow-xl transition transform active:scale-[0.98] uppercase tracking-[0.2em] text-sm ${retryTimer > 0 ? 'bg-gray-400 cursor-wait' : 'bg-brand-500 hover:bg-brand-600 shadow-brand-100'}`}
+            className={`w-full text-white font-black py-5 rounded-[2rem] shadow-xl transition transform active:scale-[0.98] uppercase tracking-[0.1em] text-sm ${retryTimer > 0 ? 'bg-gray-400 cursor-wait' : 'bg-brand-500 hover:bg-brand-600 shadow-brand-100'}`}
           >
             {retryTimer > 0 ? `Aguarde ${retryTimer}s` : (isSubmitting ? <i className="fas fa-spinner fa-spin"></i> : 'Finalizar Cadastro')}
           </button>

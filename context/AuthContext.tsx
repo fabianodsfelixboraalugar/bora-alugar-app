@@ -75,7 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       } catch (e) {
-        console.error("Erro na inicialização de segurança:", e);
+        console.warn("Auth initialization warning:", e);
       } finally {
         await fetchUsers();
         setIsLoading(false);
@@ -108,7 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (error.status === 429) {
           return { success: false, message: "⚠️ Muitas tentativas! Por favor, aguarde 60 segundos." };
         }
-        return { success: false, message: "E-mail ou senha incorretos." };
+        return { success: false, message: error.message || "E-mail ou senha incorretos." };
       }
       
       return { success: !!data.user };
@@ -123,14 +123,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       password: data.password,
       options: {
         data: {
-          name: data.name
+          name: data.name,
+          user_type: data.userType,
+          tax_id: data.taxId,
+          zip_code: data.zipCode,
+          city: data.city,
+          state: data.state
         }
       }
     });
 
     if (authError) {
       if (authError.status === 429) {
-        throw new Error("MUITAS TENTATIVAS: O servidor bloqueou novas contas temporariamente para este IP. Por favor, aguarde exatamente 60 segundos e tente novamente.");
+        throw new Error("MUITAS TENTATIVAS: O servidor bloqueou temporariamente. Aguarde 60 segundos.");
+      }
+      if (authError.status === 422) {
+        throw new Error("ERRO DE VALIDAÇÃO: Verifique se todos os campos estão corretos ou se o e-mail já existe.");
       }
       throw authError;
     }
