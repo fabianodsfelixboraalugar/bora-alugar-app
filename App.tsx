@@ -23,19 +23,6 @@ import { CookiePolicy } from './pages/CookiePolicy';
 import { InstallPwaNotification } from './components/InstallPwaNotification';
 import { CookieConsent } from './components/CookieConsent';
 import { isSupabaseConfigured } from './lib/supabase';
-import { Logo } from './components/Logo';
-
-const LoadingScreen: React.FC = () => (
-  <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6">
-    <div className="animate-fadeIn flex flex-col items-center">
-      <Logo className="h-20 mb-8" />
-      <div className="w-12 h-12 border-4 border-brand-100 border-t-brand-500 rounded-full animate-spin mb-4"></div>
-      <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] animate-pulse">
-        Iniciando sistema...
-      </p>
-    </div>
-  </div>
-);
 
 const ConfigErrorScreen: React.FC<{ type?: 'config' | 'network' }> = ({ type = 'config' }) => (
   <div className="min-h-screen bg-brand-900 flex items-center justify-center p-6 text-center">
@@ -62,23 +49,17 @@ const ConfigErrorScreen: React.FC<{ type?: 'config' | 'network' }> = ({ type = '
 );
 
 const AppContent: React.FC = () => {
-  const { isLoading: isAuthLoading } = useAuth();
   const { networkError, isLoading: isDataLoading } = useData();
 
   if (networkError) {
     return <ConfigErrorScreen type="network" />;
   }
 
-  // Apenas o carregamento de autenticação bloqueia a tela inteira
-  if (isAuthLoading) {
-    return <LoadingScreen />;
-  }
-
   return (
     <div className="flex flex-col min-h-screen font-sans text-gray-800">
       <Navbar />
       <main className="flex-grow">
-        {/* Barra de progresso discreta para carga de dados em background */}
+        {/* Barra de progresso discreta no topo enquanto os dados carregam em background */}
         {isDataLoading && (
           <div className="h-1 bg-brand-100 overflow-hidden fixed top-20 left-0 right-0 z-50">
             <div className="h-full bg-brand-500 animate-[progress_2s_ease-in-out_infinite] w-1/3"></div>
@@ -128,10 +109,14 @@ const AppContent: React.FC = () => {
 
 const AdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isAuthenticated, isLoading } = useAuth();
+  
+  // No caso de rotas protegidas (Admin), aguardamos o auth carregar, mas sem travar o resto do app
   if (isLoading) return null;
   if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
+  
   const isAuthorized = user.isActive !== false && (user.role === 'ADMIN' || !!user.jobTitle || user.id.startsWith('colab_'));
   if (!isAuthorized) return <Navigate to="/" replace />;
+  
   return <>{children}</>;
 };
 
@@ -152,3 +137,4 @@ function App() {
 }
 
 export default App;
+

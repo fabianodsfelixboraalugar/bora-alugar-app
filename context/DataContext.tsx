@@ -55,7 +55,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [networkError, setNetworkError] = useState(false);
 
   const fetchData = useCallback(async () => {
-    // Se não houver usuário, limpamos estados privados mas mantemos itens públicos
     if (!user) {
       setRentals([]);
       setMessages([]);
@@ -131,13 +130,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setNetworkError(false);
     } catch (error: any) {
       console.error("Erro ao sincronizar dados:", error);
-      setNetworkError(true);
+      // Não ativamos erro de rede se for apenas um erro de permissão (RLS)
+      if (error.code !== 'PGRST116') setNetworkError(true);
     } finally {
       setIsLoading(false);
     }
   }, [user]);
 
-  // Busca inicial de itens públicos (independente de login)
   const fetchPublicItems = async () => {
     try {
       const { data } = await supabase.from('items').select('*').order('created_at', { ascending: false });

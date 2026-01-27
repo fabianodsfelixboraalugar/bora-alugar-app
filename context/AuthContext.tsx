@@ -61,7 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchProfile = async (userId: string, authUser?: any) => {
     try {
-      const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
       if (profile) {
         setUser(mapProfile(profile, authUser));
       } else if (authUser) {
@@ -104,8 +104,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
         setAllUsers([]);
         setIsLoading(false);
-      } else if (event === 'USER_UPDATED' && session?.user) {
-        await fetchProfile(session.user.id, session.user);
       }
     });
     
@@ -122,9 +120,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
       return { success: !!data.user };
     } catch (e: any) {
-      return { success: false, message: e.message || "Erro ao entrar." };
-    } finally {
       setIsLoading(false);
+      return { success: false, message: e.message || "Erro ao entrar." };
     }
   };
 
