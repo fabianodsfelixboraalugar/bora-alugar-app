@@ -1,7 +1,5 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
-// Changed import from react-router-dom to react-router to support consolidated exports
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { GoogleGenAI } from "@google/genai";
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';

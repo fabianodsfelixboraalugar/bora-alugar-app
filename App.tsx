@@ -1,7 +1,5 @@
-
 import React from 'react';
-// Changed import from react-router-dom to react-router for unified export support
-import { HashRouter, Routes, Route, Navigate, Link } from 'react-router';
+import { HashRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider, useData } from './context/DataContext';
 import { ToastProvider } from './context/ToastContext';
