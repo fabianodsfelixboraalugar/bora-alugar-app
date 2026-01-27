@@ -12,34 +12,34 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Bora Alugar">
     
-    <!-- O manifest deve estar em /public para ser servido na raiz -->
-    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
+    <!-- O manifest deve ser servido da raiz (/public em dev vira / em prod) -->
+    <!-- O atributo crossorigin="use-credentials" é mantido apenas se o deploy for protegido (Vercel Authentication) -->
+    <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1042/1042390.png">
     
     <title>Bora Alugar - Alugue o que precisar</title>
     
-    <!-- Font Awesome (CDN aceitável para fontes) -->
+    <!-- Font Awesome (Fonte externa via CDN) -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
   <script type="importmap">
 {
   "imports": {
-    "react/": "https://esm.sh/react@^19.2.4/",
     "react": "https://esm.sh/react@^19.2.4",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.93.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "vite": "https://esm.sh/vite@^7.3.1",
     "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/",
     "react-router-dom": "https://esm.sh/react-router-dom@^7.13.0",
     "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
-    "jspdf": "https://esm.sh/jspdf@^4.0.0"
+    "jspdf": "https://esm.sh/jspdf@^4.0.0",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.93.1"
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
   <body class="bg-gray-50 text-slate-800 antialiased">
     <div id="root"></div>
-    <!-- Ponto de entrada padrão do Vite -->
+    <!-- Script principal para bundle do Vite -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
