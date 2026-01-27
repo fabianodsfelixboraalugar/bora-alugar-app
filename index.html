@@ -13,10 +13,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Bora Alugar">
     
-    <!-- REFERÊNCIA FIXA AO MANIFESTO (EVITA ERRO 401 EM /ASSETS) -->
-    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
+    <!-- REFERÊNCIA ESTÁTICA AO MANIFESTO (Resolve erro 401) -->
+    <link rel="manifest" href="/manifest.json">
     
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1042/1042390.png">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
     
     <title>Bora Alugar - Alugue o que precisar</title>
     
@@ -38,10 +38,10 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
   <body>
     <div id="root"></div>
+    <!-- Script principal processado pelo Vite -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
