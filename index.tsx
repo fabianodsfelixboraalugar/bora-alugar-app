@@ -1,4 +1,4 @@
-import './index.css'; // Importação obrigatória para o Vite processar o CSS
+import './index.css';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';

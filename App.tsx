@@ -47,23 +47,31 @@ const ConfigErrorScreen: React.FC<{ type?: 'config' | 'network' }> = ({ type = '
   </div>
 );
 
+const LoadingScreen = () => (
+  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div className="flex flex-col items-center gap-4">
+      <div className="w-12 h-12 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Sincronizando...</p>
+    </div>
+  </div>
+);
+
 const AppContent: React.FC = () => {
-  const { networkError, isLoading: isDataLoading } = useData();
+  const { isLoading: isAuthLoading } = useAuth();
+  const { networkError } = useData();
 
   if (networkError) {
     return <ConfigErrorScreen type="network" />;
+  }
+
+  if (isAuthLoading) {
+    return <LoadingScreen />;
   }
 
   return (
     <div className="flex flex-col min-h-screen font-sans text-gray-800">
       <Navbar />
       <main className="flex-grow">
-        {/* Barra de progresso não intrusiva se dados carregarem em background */}
-        {isDataLoading && (
-          <div className="h-0.5 bg-brand-100 overflow-hidden fixed top-20 left-0 right-0 z-50">
-            <div className="h-full bg-brand-500 animate-[progress_2s_ease-in-out_infinite] w-1/4"></div>
-          </div>
-        )}
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/search" element={<Search />} />
@@ -108,9 +116,9 @@ const AppContent: React.FC = () => {
 
 const AdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isAuthenticated, isLoading } = useAuth();
-  if (isLoading) return null; // Apenas guards bloqueiam, para evitar falso negativo
+  if (isLoading) return <LoadingScreen />;
   if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
-  const isAuthorized = user.isActive !== false && (user.role === 'ADMIN' || !!user.jobTitle || user.id.startsWith('colab_'));
+  const isAuthorized = user.role === 'ADMIN' || !!user.jobTitle;
   if (!isAuthorized) return <Navigate to="/" replace />;
   return <>{children}</>;
 };

@@ -1,7 +1,6 @@
-
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { User, UserType, UserPlan, VerificationStatus, UserRole } from '../types';
+import { User, UserType, UserPlan, VerificationStatus } from '../types';
 
 interface AuthContextType {
   user: User | null;
@@ -51,7 +50,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchProfile = async (userId: string, authUser?: any) => {
     try {
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+      const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+      if (error) throw error;
+      
       if (profile) {
         setUser(mapProfile(profile, authUser));
       } else if (authUser) {
@@ -59,6 +60,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (e) {
       console.error("Erro ao carregar perfil:", e);
+      if (authUser) setUser(mapProfile({ id: userId }, authUser));
     }
   };
 
@@ -76,11 +78,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const initAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+
         if (session?.user && mounted) {
           await fetchProfile(session.user.id, session.user);
           await fetchUsers();
         }
+      } catch (e) {
+        console.error("Erro na inicialização do Auth:", e);
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -91,15 +97,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
-      if (event === 'SIGNED_IN' && session?.user) {
+      if (session?.user) {
         await fetchProfile(session.user.id, session.user);
         await fetchUsers();
-        setIsLoading(false);
-      } else if (event === 'SIGNED_OUT') {
+      } else {
         setUser(null);
-        setAllUsers([]);
-        setIsLoading(false);
       }
+      setIsLoading(false);
     });
     
     return () => {
@@ -109,15 +113,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [mapProfile]);
 
   const login = async (email: string, password: string) => {
-    setIsLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       return { success: !!data.user };
     } catch (e: any) {
-      return { success: false, message: e.message || "Erro ao entrar." };
-    } finally {
-      setIsLoading(false);
+      return { success: false, message: e.message || "E-mail ou senha inválidos." };
     }
   };
 
@@ -145,11 +146,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    setIsLoading(true);
     try {
       await supabase.auth.signOut();
     } finally {
       setUser(null);
       setAllUsers([]);
+      setIsLoading(false);
     }
   };
 
