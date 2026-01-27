@@ -1,6 +1,7 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 import { Item, Rental, Review, Message, Notification, NotificationType, RentalStatus, AppLog, Category, ItemStatus } from '../types';
 
 interface DataContextType {
@@ -36,11 +37,13 @@ interface DataContextType {
   calculateDistance: (lat1: number, lon1: number, lat2: number, lon2: number) => number;
   deleteUserData: (userId: string) => Promise<void>;
   clearLogs: () => Promise<void>;
+  refreshData: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
   const [items, setItems] = useState<Item[]>([]);
   const [rentals, setRentals] = useState<Rental[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -48,10 +51,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [reviews, setReviews] = useState<Review[]>([]);
   const [logs, setLogs] = useState<AppLog[]>([]);
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [networkError, setNetworkError] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    // Se não houver usuário, limpamos estados privados mas mantemos itens públicos
+    if (!user) {
+      setRentals([]);
+      setMessages([]);
+      setNotifications([]);
+      return;
+    }
+
+    setIsLoading(true);
     try {
       const [
         { data: itemsRaw },
@@ -62,8 +74,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ] = await Promise.all([
         supabase.from('items').select('*').order('created_at', { ascending: false }),
         supabase.from('rentals').select('*').order('created_at', { ascending: false }),
-        supabase.from('notifications').select('*').order('created_at', { ascending: false }),
-        supabase.from('messages').select('*').order('timestamp', { ascending: true }),
+        supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('messages').select('*').or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order('timestamp', { ascending: true }),
         supabase.from('reviews').select('*').order('date', { ascending: false })
       ]);
 
@@ -119,20 +131,43 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setNetworkError(false);
     } catch (error: any) {
       console.error("Erro ao sincronizar dados:", error);
-      // Não marca erro de rede se já tivermos alguns dados, apenas avisa
-      if (items.length === 0) setNetworkError(true);
+      setNetworkError(true);
     } finally {
       setIsLoading(false);
+    }
+  }, [user]);
+
+  // Busca inicial de itens públicos (independente de login)
+  const fetchPublicItems = async () => {
+    try {
+      const { data } = await supabase.from('items').select('*').order('created_at', { ascending: false });
+      if (data) {
+        setItems(data.map((i: any) => ({
+          ...i,
+          ownerId: i.owner_id,
+          ownerName: i.owner_name,
+          pricePerDay: i.price_per_day,
+          deliveryConfig: i.delivery_config
+        })) as Item[]);
+      }
+    } catch (e) {
+      console.error("Erro ao carregar itens públicos:", e);
     }
   };
 
   useEffect(() => {
-    fetchData();
-    const channel = supabase.channel('db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public' }, () => fetchData())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    fetchPublicItems();
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchData();
+      const channel = supabase.channel(`user-data-${user.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public' }, () => fetchData())
+        .subscribe();
+      return () => { supabase.removeChannel(channel); };
+    }
+  }, [user, fetchData]);
 
   const addItem = async (itemData: any) => {
     const { error } = await supabase.from('items').insert([{
@@ -304,7 +339,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUserLocation, addItem, removeItem, updateItem, getItemById, addRental, updateRentalStatus, 
       getRentalsByUserId, getRentalsByOwnerId, checkItemAvailability, sendMessage, markAsRead, 
       deleteMessage, deleteConversation, clearAllMessages, addNotification, markNotificationAsRead, 
-      clearNotifications, submitReview, getReviewByTransaction, calculateDistance, deleteUserData, clearLogs
+      clearNotifications, submitReview, getReviewByTransaction, calculateDistance, deleteUserData, clearLogs,
+      refreshData: fetchData
     }}>
       {children}
     </DataContext.Provider>

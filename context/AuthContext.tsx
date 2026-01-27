@@ -55,13 +55,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
       if (data) setAllUsers(data.map(p => mapProfile(p)));
     } catch (e) {
-      console.warn("Aviso: Falha ao sincronizar lista de perfis secundários.");
+      console.warn("Aviso: Falha ao sincronizar lista de perfis.");
     }
   };
 
   const fetchProfile = async (userId: string, authUser?: any) => {
     try {
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+      const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
       if (profile) {
         setUser(mapProfile(profile, authUser));
       } else if (authUser) {
@@ -80,14 +80,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user && mounted) {
           await fetchProfile(session.user.id, session.user);
+          await fetchUsers();
         }
       } catch (e) {
-        console.error("Erro na inicialização:", e);
+        console.error("Erro na inicialização auth:", e);
       } finally {
-        if (mounted) {
-          await fetchUsers();
-          setIsLoading(false); // CARGA INICIAL FINALIZADA
-        }
+        if (mounted) setIsLoading(false);
       }
     };
 
@@ -96,29 +94,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
-      // REMOVIDO: INITIAL_SESSION para evitar loop de carregamento
-      if (event === 'SIGNED_IN' || event === 'USER_UPDATED' || event === 'TOKEN_REFRESHED') {
+      if (event === 'SIGNED_IN') {
         if (session?.user) {
-          try {
-            // Sincroniza dados mas sem re-ativar o loading se já estivermos logados
-            // para evitar o efeito de "piscar" a tela de Splash
-            await Promise.all([
-              fetchProfile(session.user.id, session.user),
-              fetchUsers()
-            ]);
-          } finally {
-            setIsLoading(false);
-          }
-        } else {
-          setIsLoading(false);
+          await fetchProfile(session.user.id, session.user);
+          await fetchUsers();
         }
+        setIsLoading(false);
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setAllUsers([]);
         setIsLoading(false);
-      } else {
-        // Catch-all para garantir que NENHUM evento deixe o app preso em loading
-        setIsLoading(false);
+      } else if (event === 'USER_UPDATED' && session?.user) {
+        await fetchProfile(session.user.id, session.user);
       }
     });
     
@@ -132,15 +119,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        if (error.message.includes("Email not confirmed")) {
-          return { success: false, message: "⚠️ E-mail não confirmado! Verifique sua caixa de entrada." };
-        }
-        return { success: false, message: "E-mail ou senha incorretos." };
-      }
+      if (error) throw error;
       return { success: !!data.user };
-    } catch (e) {
-      return { success: false, message: "Erro ao tentar entrar." };
+    } catch (e: any) {
+      return { success: false, message: e.message || "Erro ao entrar." };
     } finally {
       setIsLoading(false);
     }
@@ -164,30 +146,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (authError) throw authError;
-
-      const needsConfirmation = !authData.session && !!authData.user;
-      
-      return { 
-        success: true, 
-        needsConfirmation,
-        message: needsConfirmation ? "Verifique seu e-mail para ativar sua conta." : "Cadastro realizado com sucesso!"
-      };
+      return { success: true, needsConfirmation: !authData.session && !!authData.user };
     } catch (err: any) {
-      return { 
-        success: false, 
-        needsConfirmation: false, 
-        message: err.message || "Erro ao realizar cadastro." 
-      };
+      return { success: false, needsConfirmation: false, message: err.message };
     }
   };
 
   const logout = async () => {
-    setIsLoading(true);
     try {
       await supabase.auth.signOut();
     } finally {
       setUser(null);
-      setIsLoading(false);
+      setAllUsers([]);
     }
   };
 
