@@ -1,8 +1,7 @@
-
+import './index.css'; // Importação obrigatória para o Vite processar o CSS
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import './index.css'; // Importação do CSS para processamento pelo Vite
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
