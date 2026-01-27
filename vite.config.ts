@@ -1,4 +1,3 @@
-
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -13,11 +12,9 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: false,
-    // Garante que arquivos na pasta public não sejam movidos para assets
     assetsDir: 'assets',
     rollupOptions: {
       output: {
-        // Garante nomes de arquivos consistentes para o bundle
         manualChunks: undefined
       }
     }
