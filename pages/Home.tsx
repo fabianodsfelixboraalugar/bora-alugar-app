@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleGenAI } from "@google/genai";
@@ -8,7 +9,7 @@ import { ItemSkeleton } from '../components/ItemSkeleton';
 import { Category } from '../types';
 
 export const Home: React.FC = () => {
-  const { items, userLocation, setUserLocation, calculateDistance, isLoading: isDataLoading } = useData();
+  const { items, userLocation, setUserLocation, calculateDistance } = useData();
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   
@@ -16,15 +17,30 @@ export const Home: React.FC = () => {
   const [locationStatus, setLocationStatus] = useState<'prompt' | 'loading' | 'success' | 'denied' | 'error'>('prompt');
   const [currentCity, setCurrentCity] = useState<string>('');
   const [searchRadius, setSearchRadius] = useState<number>(50);
-  const [groundingLinks, setGroundingLinks] = useState<{url: string, title: string}[]>([]);
+  const [showRadiusFilter, setShowRadiusFilter] = useState(false);
+  const [fallbackZipCode, setFallbackZipCode] = useState('');
+  const [isSearchingZip, setIsSearchingZip] = useState(false);
 
+  // --- 1. SOLICITAÇÃO DE LOCALIZAÇÃO CONDICIONADA AO LOGIN ---
   useEffect(() => {
-    if (!isAuthenticated && !userLocation) return;
-    if (userLocation) { setLocationStatus('success'); return; }
+    if (!isAuthenticated && !userLocation) {
+        setLocationStatus('prompt');
+        return;
+    }
 
     const requestLocation = () => {
-      if (!('geolocation' in navigator)) { setLocationStatus('error'); return; }
+      if (!('geolocation' in navigator)) {
+          setLocationStatus('error');
+          return;
+      }
+
+      if (userLocation) {
+        setLocationStatus('success');
+        return;
+      }
+
       setLocationStatus('loading');
+
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
@@ -35,141 +51,299 @@ export const Home: React.FC = () => {
               try {
                   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                   const response = await ai.models.generateContent({
-                      model: "gemini-3-flash-preview",
-                      contents: `Identifique o nome da cidade desta localização geográfica (lat: ${latitude}, lng: ${longitude}). Retorne APENAS o nome da cidade.`,
-                      config: { 
-                        tools: [{ googleMaps: {} }],
-                        toolConfig: { retrievalConfig: { latLng: { latitude, longitude } } }
+                      model: "gemini-2.5-flash",
+                      contents: "Retorne APENAS o nome da cidade desta localização.",
+                      config: {
+                          tools: [{ googleMaps: {} }],
+                          toolConfig: {
+                              retrievalConfig: {
+                                  latLng: { latitude, longitude }
+                              }
+                          }
                       },
                   });
                   const city = response.text?.trim().replace(/\.$/, '');
                   if (city) setCurrentCity(city);
-
-                  // Extrair links de grounding obrigatórios conforme as diretrizes
-                  const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-                  if (chunks) {
-                    const links = chunks.map((c: any) => ({
-                      url: c.maps?.uri || '',
-                      title: c.maps?.title || 'Ver no Google Maps'
-                    })).filter((l: any) => l.url);
-                    setGroundingLinks(links);
-                  }
               } catch (err) { console.error(err); }
           }
         },
-        () => setLocationStatus('denied'),
+        (error) => {
+          console.warn("Localização negada:", error);
+          setLocationStatus('denied');
+        },
         { enableHighAccuracy: true, timeout: 8000 }
       );
     };
+
     requestLocation();
   }, [isAuthenticated, setUserLocation, userLocation]);
 
+  // --- 2. FALLBACK POR CEP ---
+  const handleZipFallback = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (fallbackZipCode.length < 8) return;
+    
+    setIsSearchingZip(true);
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${fallbackZipCode.replace(/\D/g, '')}/json/`);
+      const data = await response.json();
+      if (!data.erro) {
+        setCurrentCity(data.localidade);
+        setLocationStatus('success');
+      } else {
+        alert("CEP não encontrado.");
+      }
+    } catch (err) {
+      alert("Erro ao buscar CEP.");
+    } finally {
+      setIsSearchingZip(false);
+    }
+  };
+
+  // --- 3. LÓGICA DE ORDENAÇÃO PRIORITÁRIA (MAIS PRÓXIMO PRIMEIRO) ---
   const displayedItems = useMemo(() => {
     let processedItems = [...items];
+
     if (userLocation) {
         processedItems = processedItems
-            .map(item => ({ ...item, distance: item.lat && item.lng ? calculateDistance(userLocation.lat, userLocation.lng, item.lat, item.lng) : 9999 }))
+            .map(item => {
+                if (item.lat && item.lng) {
+                    const dist = calculateDistance(userLocation.lat, userLocation.lng, item.lat, item.lng);
+                    return { ...item, distance: dist };
+                }
+                return { ...item, distance: 99999 };
+            })
             .sort((a, b) => (a.distance || 0) - (b.distance || 0))
-            .filter(item => item.distance <= searchRadius);
+            .filter(item => (item.distance !== undefined ? item.distance <= searchRadius : true));
     } else {
         processedItems.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
+
     return processedItems.slice(0, 8);
   }, [items, userLocation, searchRadius, calculateDistance]);
 
-  const categoryIcons: Record<string, string> = {
-    [Category.TOOLS]: 'fa-tools',
-    [Category.REAL_ESTATE]: 'fa-home',
-    [Category.GAMES]: 'fa-gamepad',
-    [Category.CAMPING]: 'fa-campground',
-    [Category.ELECTRONICS]: 'fa-laptop',
-    [Category.VEHICLES]: 'fa-car',
-    [Category.PARTY]: 'fa-glass-cheers',
-    [Category.APPLIANCES]: 'fa-blender',
-    [Category.OTHER]: 'fa-box'
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    navigate(`/search?q=${encodeURIComponent(searchTerm)}`);
   };
 
+  const categories = Object.values(Category);
+
   return (
-    <div className="min-h-screen bg-gray-50/50">
-      <section className="relative bg-[#1a2e21] pt-20 pb-24 lg:pt-32 lg:pb-40 overflow-hidden">
-        <div className="absolute inset-0 opacity-10 bg-[url('https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=1950&q=80')] bg-cover bg-center"></div>
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl md:text-6xl font-black text-white uppercase tracking-tighter mb-8 animate-fadeIn leading-tight">
-            Alugue o que precisar,<br/><span className="text-brand-500">ganhe com o que tem.</span>
+    <div className="min-h-screen bg-gray-50">
+      {/* Hero Section */}
+      <section className="relative bg-brand-900 pt-16 pb-20 lg:pt-24 lg:pb-32 overflow-hidden">
+        <div className="absolute inset-0 opacity-20 bg-[url('https://images.unsplash.com/photo-1556761175-5973dc0f32e7?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80')] bg-cover bg-center"></div>
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-white">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight mb-8 animate-fadeIn">
+            Alugue o que precisar,<br className="hidden md:block"/> ganhe com o que tem.
           </h1>
           
-          <form onSubmit={(e) => { e.preventDefault(); navigate(`/search?q=${searchTerm}`); }} className="max-w-3xl mx-auto bg-white p-2 rounded-[3rem] shadow-2xl flex items-center relative z-20 mb-12 border-4 border-white/20 backdrop-blur-sm">
-            <div className="pl-8 text-gray-300"><i className="fas fa-search text-xl"></i></div>
+          <form onSubmit={handleSearch} className="max-w-2xl mx-auto bg-white p-2 rounded-full shadow-2xl flex items-center relative z-20 mb-12">
+            <div className="pl-6 text-gray-400">
+              <i className="fas fa-search text-lg"></i>
+            </div>
             <input 
               type="text" 
               placeholder="O que você está procurando hoje?" 
-              className="w-full px-6 py-5 text-gray-900 placeholder-gray-400 bg-transparent focus:outline-none text-lg font-medium" 
-              value={searchTerm} 
-              onChange={(e) => setSearchTerm(e.target.value)} 
+              className="w-full px-4 py-3 text-gray-900 placeholder-gray-500 bg-transparent focus:outline-none rounded-full"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
             />
-            <button type="submit" className="bg-[#58B83F] hover:bg-brand-600 text-white px-10 py-5 rounded-full font-black uppercase tracking-widest transition duration-200 shadow-xl active:scale-95">Buscar</button>
+            <button type="submit" className="bg-secondary-500 hover:bg-secondary-600 text-white px-8 py-3 rounded-full font-bold transition duration-200 shadow-lg">
+              Buscar
+            </button>
           </form>
 
-          {locationStatus === 'success' && currentCity && (
-             <div className="flex flex-col items-center gap-2">
-                <div className="inline-flex items-center gap-3 bg-white/10 px-6 py-2.5 rounded-full border border-white/20 animate-fadeIn backdrop-blur-md">
-                   <i className="fas fa-map-marker-alt text-brand-500"></i> 
-                   <span className="text-sm font-bold text-white uppercase tracking-widest">Catálogo em {currentCity}</span>
+          {/* --- BANNER CTA SUPERIOR --- */}
+          <div className="max-w-md mx-auto mb-10 animate-fadeIn">
+            <div className="bg-brand-600 rounded-3xl p-6 md:p-8 text-center text-white relative overflow-hidden shadow-2xl border border-white/10 transition-transform hover:scale-[1.02] duration-300">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-black/10 rounded-full -ml-12 -mb-12"></div>
+                
+                <div className="relative z-10">
+                    <h2 className="text-xl md:text-2xl font-black mb-3 leading-tight uppercase tracking-tight">
+                        Transforme objetos em renda extra
+                    </h2>
+                    <p className="text-sm opacity-90 mb-6 font-medium leading-snug">
+                        Tem uma furadeira, câmera ou barraca parada? Anuncie hoje e comece a ganhar dinheiro com o que você já tem.
+                    </p>
+                    <button 
+                        onClick={() => isAuthenticated ? navigate('/add-item') : navigate('/login')} 
+                        className="bg-white text-brand-700 hover:bg-brand-50 px-10 py-3.5 rounded-2xl font-black text-base shadow-xl transition transform active:scale-95 flex items-center justify-center gap-2 mx-auto"
+                    >
+                        Anunciar Grátis
+                    </button>
                 </div>
-                {groundingLinks.length > 0 && (
-                  <div className="flex gap-4">
-                    {groundingLinks.map((link, idx) => (
-                      <a key={idx} href={link.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-brand-200 hover:text-white underline font-bold transition">
-                        {link.title}
-                      </a>
-                    ))}
-                  </div>
-                )}
-             </div>
-          )}
+            </div>
+          </div>
+
+          {/* Localização Feedback */}
+          <div className="mt-6 flex flex-col items-center min-h-[40px]">
+            {locationStatus === 'loading' && (
+               <div className="flex items-center gap-3 text-brand-100 bg-brand-800/40 px-6 py-2.5 rounded-full backdrop-blur-md border border-white/10">
+                  <i className="fas fa-circle-notch fa-spin"></i> 
+                  <span className="text-sm font-medium">Buscando as melhores ofertas perto de você...</span>
+               </div>
+            )}
+            
+            {locationStatus === 'denied' && (
+              <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 max-w-md w-full animate-fadeIn">
+                <p className="text-sm text-brand-100 mb-3 font-medium">
+                  <i className="fas fa-map-marker-slash mr-2"></i> 
+                  Localização desativada. Informe seu CEP para ver itens na sua região:
+                </p>
+                <form onSubmit={handleZipFallback} className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="Ex: 01310-100"
+                    className="flex-1 bg-white text-gray-900 px-4 py-2 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-500"
+                    value={fallbackZipCode}
+                    onChange={e => setFallbackZipCode(e.target.value)}
+                  />
+                  <button 
+                    disabled={isSearchingZip}
+                    className="bg-brand-600 px-5 py-2 rounded-xl font-bold text-sm hover:bg-brand-500 transition shadow-md"
+                  >
+                    {isSearchingZip ? <i className="fas fa-spinner fa-spin"></i> : 'Aplicar'}
+                  </button>
+                </form>
+              </div>
+            )}
+            
+            {locationStatus === 'success' && currentCity && (
+               <div className="text-brand-100 text-xs font-bold flex items-center gap-2 bg-green-900/30 px-5 py-2 rounded-full border border-green-500/30 animate-fadeIn">
+                  <i className="fas fa-map-marker-alt text-green-400"></i> Mostrando itens próximos a <span className="text-white">{currentCity}</span>
+               </div>
+            )}
+          </div>
         </div>
       </section>
 
-      <section className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h2 className="text-xl font-black text-gray-900 mb-10 flex items-center gap-3 uppercase tracking-widest"><span className="w-12 h-1.5 bg-brand-500 rounded-full"></span>Categorias</h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-9 gap-4">
-          {Object.values(Category).map((cat) => (
+      {/* Categorias Section */}
+      <section className="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <h2 className="text-xl font-bold text-gray-900 mb-8 flex items-center gap-3">
+            <span className="w-8 h-1 bg-brand-600 rounded-full"></span>
+            Navegue por Categorias
+        </h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-4">
+          {categories.map((cat, idx) => (
             <button 
-              key={cat} 
-              onClick={() => navigate(`/search?category=${cat}`)} 
-              className="flex flex-col items-center p-6 bg-white rounded-[2.5rem] shadow-sm hover:shadow-xl hover:scale-105 transition-all border border-gray-100 group"
+              key={idx}
+              onClick={() => navigate(`/search?category=${cat}`)}
+              className="flex flex-col items-center p-4 bg-white rounded-2xl shadow-sm hover:shadow-lg hover:border-brand-200 transition border border-gray-100 group"
             >
-              <div className="w-16 h-16 bg-brand-50 rounded-2xl flex items-center justify-center text-brand-600 mb-4 group-hover:bg-brand-600 group-hover:text-white transition-all shadow-inner">
-                <i className={`fas ${categoryIcons[cat] || 'fa-box'} text-2xl`}></i>
+              <div className="w-12 h-12 bg-brand-50 rounded-full flex items-center justify-center text-brand-600 mb-3 group-hover:bg-brand-600 group-hover:text-white transition-all">
+                <i className={`fas fa-${getIconForCategory(cat)}`}></i>
               </div>
-              <span className="text-[10px] font-black text-gray-600 text-center uppercase tracking-tighter leading-tight">{cat}</span>
+              <span className="text-xs font-bold text-gray-700 text-center uppercase tracking-tight">{cat}</span>
             </button>
           ))}
         </div>
       </section>
 
-      <section className="py-20 bg-white rounded-t-[5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.02)]">
+      {/* Grid de Itens */}
+      <section className="py-12 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-12">
-            <h2 className="text-3xl font-black text-gray-900 tracking-tighter uppercase">{userLocation ? 'Ofertas na sua região' : 'Destaques do Dia'}</h2>
-            <button onClick={() => navigate('/search')} className="text-brand-600 font-black text-xs uppercase tracking-widest hover:underline">Ver tudo <i className="fas fa-arrow-right ml-1"></i></button>
+          <div className="flex justify-between items-end mb-8">
+            <div>
+                <h2 className="text-2xl font-black text-gray-900 tracking-tight">
+                {userLocation ? 'Perto de Você' : 'Novidades no Bora Alugar'}
+                </h2>
+                <p className="text-gray-500 text-sm mt-1">
+                    {userLocation ? 'Itens disponíveis a poucos minutos da sua localização.' : 'Veja o que acabou de chegar na plataforma.'}
+                </p>
+            </div>
+            
+            {userLocation && (
+                <div className="relative">
+                    <button 
+                        onClick={() => setShowRadiusFilter(!showRadiusFilter)}
+                        className="flex items-center gap-2 text-xs font-bold text-brand-700 bg-brand-50 px-4 py-2.5 rounded-xl border border-brand-100 hover:bg-brand-100 transition shadow-sm"
+                    >
+                        <i className="fas fa-sliders-h"></i> Raio: {searchRadius}km <i className="fas fa-chevron-down text-[10px]"></i>
+                    </button>
+                    {showRadiusFilter && (
+                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 py-2 animate-fadeIn">
+                            <p className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Ajustar Distância</p>
+                            {[5, 10, 25, 50, 100].map(km => (
+                                <button
+                                    key={km}
+                                    onClick={() => { setSearchRadius(km); setShowRadiusFilter(false); }}
+                                    className={`w-full text-left px-4 py-2.5 text-sm font-bold ${searchRadius === km ? 'bg-brand-50 text-brand-700 border-l-4 border-brand-600' : 'text-gray-600 hover:bg-gray-50'}`}
+                                >
+                                    Até {km} km
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-              {isDataLoading ? (
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {locationStatus === 'loading' ? (
                   Array(8).fill(0).map((_, i) => <ItemSkeleton key={i} />)
               ) : (
-                  displayedItems.map(item => <ItemCard key={item.id} item={item} />)
+                  displayedItems.map(item => (
+                    <ItemCard key={item.id} item={item} />
+                  ))
+              )}
+              
+              {locationStatus !== 'loading' && displayedItems.length === 0 && (
+                  <div className="col-span-full text-center py-20 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
+                      <div className="bg-white w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                          <i className="fas fa-map-marked-alt text-3xl text-gray-300"></i>
+                      </div>
+                      <p className="text-gray-500 font-bold">Nenhum item encontrado no raio de {searchRadius}km.</p>
+                      <button 
+                        onClick={() => setSearchRadius(prev => prev + 50)}
+                        className="mt-4 bg-brand-600 text-white px-6 py-2 rounded-xl font-bold text-sm shadow-md transition hover:bg-brand-700"
+                      >
+                        Aumentar raio de busca
+                      </button>
+                  </div>
               )}
           </div>
-          {!isDataLoading && displayedItems.length === 0 && (
-            <div className="text-center py-20 bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-100">
-               <i className="fas fa-search-location text-gray-200 text-5xl mb-4"></i>
-               <p className="text-gray-400 font-bold uppercase text-sm">Nenhum item encontrado nesta região.</p>
-               <button onClick={() => setSearchRadius(500)} className="mt-4 text-brand-600 font-black text-xs uppercase underline">Aumentar Raio de Busca</button>
+        </div>
+      </section>
+
+      {/* Rodapé CTA */}
+      <section className="py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="bg-brand-600 rounded-[2.5rem] p-10 md:p-16 text-center text-white relative overflow-hidden shadow-2xl">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32"></div>
+                <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 rounded-full -ml-24 -mb-24"></div>
+                
+                <div className="relative z-10">
+                    <h2 className="text-3xl md:text-5xl font-black mb-6">Transforme objetos em renda extra</h2>
+                    <p className="text-lg opacity-90 mb-10 max-w-2xl mx-auto font-medium">
+                        Tem uma furadeira, câmera ou barraca parada? Anuncie hoje e comece a ganhar dinheiro com o que você já tem.
+                    </p>
+                    <button 
+                        onClick={() => isAuthenticated ? navigate('/add-item') : navigate('/login')} 
+                        className="bg-white text-brand-700 hover:bg-brand-50 px-10 py-4 rounded-2xl font-black text-lg shadow-xl transition transform hover:-translate-y-1 active:scale-95"
+                    >
+                        Anunciar Grátis
+                    </button>
+                </div>
             </div>
-          )}
         </div>
       </section>
     </div>
   );
 };
+
+function getIconForCategory(category: string): string {
+  switch(category) {
+    case Category.TOOLS: return 'tools';
+    case Category.REAL_ESTATE: return 'home';
+    case Category.GAMES: return 'gamepad';
+    case Category.CAMPING: return 'campground';
+    case Category.ELECTRONICS: return 'camera';
+    case Category.VEHICLES: return 'car';
+    case Category.PARTY: return 'birthday-cake';
+    case Category.APPLIANCES: return 'blender';
+    default: return 'box';
+  }
+}

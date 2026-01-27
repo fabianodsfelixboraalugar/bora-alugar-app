@@ -1,7 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-// Changed import from react-router-dom to react-router
-import { useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router-dom';
 import { GoogleGenAI } from "@google/genai";
 import { useData } from '../context/DataContext';
 import { ItemCard } from '../components/ItemCard';

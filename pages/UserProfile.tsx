@@ -1,7 +1,6 @@
 
 import React, { useState } from 'react';
-// Changed import from react-router-dom to react-router
-import { useParams, useNavigate } from 'react-router';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { VerificationStatus } from '../types';

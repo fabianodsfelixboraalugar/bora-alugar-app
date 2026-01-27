@@ -1,235 +1,147 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
-import { User, UserType, UserPlan, VerificationStatus } from '../types';
 
-interface AuthContextType {
-  user: User | null;
-  isAuthenticated: boolean;
-  allUsers: User[];
-  isLoading: boolean;
-  login: (email: string, password: string) => Promise<{success: boolean, message?: string}>;
-  register: (data: any) => Promise<{success: boolean, needsConfirmation: boolean, message?: string}>;
-  logout: () => void;
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { User, AuthState, UserPlan, VerificationStatus, UserType, UserRole } from '../types';
+import { supabase } from '../lib/supabase';
+import { useData } from './DataContext';
+
+interface AuthContextType extends AuthState {
+  login: (email: string, password?: string) => Promise<boolean>;
+  register: (userData: any) => Promise<void>;
+  logout: () => Promise<void>;
   updateUser: (data: Partial<User>) => Promise<void>;
-  deleteUser: (userId: string) => Promise<void>;
-  getUserById: (id: string) => User | undefined;
-  getAllUsers: () => Promise<User[]>;
-  getPendingUsers: () => User[];
-  submitKYC: (documentUrl: string, selfieUrl: string) => Promise<void>;
   adminApproveKYC: (userId: string) => Promise<void>;
-  adminRejectKYC: (userId: string) => Promise<void>;
-  adminUpdateUser: (userId: string, data: Partial<User>) => Promise<void>;
-  createCollaborator: (data: any) => Promise<void>;
-  toggleUserStatus: (userId: string) => Promise<void>;
-  confirmarPagamento: (valor: number) => Promise<void>;
-  cancelarAssinatura: () => Promise<void>;
-  isValidTaxId: (taxId: string, type: UserType) => boolean;
+  getUserById: (id: string) => User | undefined;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const mapProfile = useCallback((p: any, authUser?: any): User => ({
-    ...p,
-    id: p.id || authUser?.id,
-    name: p.name || authUser?.user_metadata?.name || 'Usuário',
-    email: p.email || authUser?.email,
-    userType: p.user_type || authUser?.user_metadata?.user_type || 'Pessoa Física',
-    zipCode: p.zip_code || authUser?.user_metadata?.zip_code,
-    joinedDate: p.joined_date || new Date().toISOString(),
-    verificationStatus: p.verification_status || 'Não Iniciado',
-    isActive: p.is_active ?? true,
-    plan: p.plan || 'Gratuito',
-    role: p.role || 'USER',
-    trustStats: p.trust_stats || { score: 50, level: 'NEUTRAL', completedTransactions: 0, cancellations: 0, avgRatingAsOwner: 5, countRatingAsOwner: 0, avgRatingAsRenter: 5, countRatingAsRenter: 0 }
-  }), []);
-
-  const fetchProfile = async (userId: string, authUser?: any) => {
-    try {
-      const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-      if (error) throw error;
-      
-      if (profile) {
-        setUser(mapProfile(profile, authUser));
-      } else if (authUser) {
-        setUser(mapProfile({ id: userId }, authUser));
-      }
-    } catch (e) {
-      console.error("Erro ao carregar perfil:", e);
-      if (authUser) setUser(mapProfile({ id: userId }, authUser));
-    }
-  };
-
-  const fetchUsers = async () => {
-    try {
-      const { data } = await supabase.from('profiles').select('*');
-      if (data) setAllUsers(data.map(p => mapProfile(p)));
-    } catch (e) {
-      console.warn("Falha ao sincronizar lista de perfis.");
-    }
-  };
+  const { addLog } = useData();
+  const [auth, setAuth] = useState<AuthState>({
+    user: null,
+    isAuthenticated: false
+  });
+  const [usersRegistry, setUsersRegistry] = useState<User[]>([]);
 
   useEffect(() => {
-    let mounted = true;
-
+    // 1. Verificar sessão ativa no Supabase
     const initAuth = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) throw error;
-
-        if (session?.user && mounted) {
-          await fetchProfile(session.user.id, session.user);
-          await fetchUsers();
-        }
-      } catch (e) {
-        console.error("Erro na inicialização do Auth:", e);
-      } finally {
-        if (mounted) setIsLoading(false);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await fetchUserProfile(session.user.id);
       }
+
+      // 2. Carregar lista de usuários (para contexto de Admin e busca)
+      const { data: profiles } = await supabase.from('profiles').select('*');
+      if (profiles) setUsersRegistry(profiles as User[]);
     };
 
     initAuth();
 
+    // Listener de mudanças na autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-
       if (session?.user) {
-        await fetchProfile(session.user.id, session.user);
-        await fetchUsers();
+        await fetchUserProfile(session.user.id);
       } else {
-        setUser(null);
+        setAuth({ user: null, isAuthenticated: false });
       }
-      setIsLoading(false);
     });
-    
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, [mapProfile]);
 
-  const login = async (email: string, password: string) => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      return { success: !!data.user };
-    } catch (e: any) {
-      return { success: false, message: e.message || "E-mail ou senha inválidos." };
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchUserProfile = async (userId: string) => {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (profile) {
+      setAuth({ user: profile as User, isAuthenticated: true });
     }
   };
 
-  const register = async (data: any) => {
-    try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-        options: {
-          data: {
-            name: data.name,
-            user_type: data.userType,
-            tax_id: data.taxId,
-            zip_code: data.zipCode,
-            city: data.city,
-            state: data.state
-          }
-        }
-      });
-      if (authError) throw authError;
-      return { success: true, needsConfirmation: !authData.session && !!authData.user };
-    } catch (err: any) {
-      return { success: false, needsConfirmation: false, message: err.message };
+  const login = async (email: string, password?: string): Promise<boolean> => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password: password || '',
+    });
+
+    if (error) {
+      addLog('LOGIN_FALHA', `Erro: ${error.message}`, undefined, email);
+      return false;
+    }
+
+    addLog('LOGIN_SUCESSO', 'Usuário logado via Supabase Auth', data.user.id, email);
+    return true;
+  };
+
+  const register = async (userData: any) => {
+    // 1. Auth no Supabase
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: userData.email,
+      password: userData.password,
+    });
+
+    if (authError) throw authError;
+
+    if (authData.user) {
+      const newUserProfile: User = {
+        id: authData.user.id,
+        name: userData.name,
+        email: userData.email,
+        role: 'USER',
+        userType: userData.userType,
+        city: userData.city,
+        joinedDate: new Date().toISOString(),
+        plan: UserPlan.FREE,
+        verificationStatus: VerificationStatus.NOT_STARTED,
+        verified: false,
+        isActive: true,
+        avatar: 'https://ui-avatars.com/api/?name=' + encodeURIComponent(userData.name),
+        trustStats: { score: 50, level: 'NEUTRAL', completedTransactions: 0, cancellations: 0, avgRatingAsOwner: 0, countRatingAsOwner: 0, avgRatingAsRenter: 0, countRatingAsRenter: 0 }
+      };
+
+      // 2. Salvar perfil na tabela de profiles
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([newUserProfile]);
+
+      if (profileError) throw profileError;
+
+      addLog('CADASTRO_NOVO', `Novo usuário registrado: ${userData.email}`, authData.user.id);
     }
   };
 
   const logout = async () => {
-    setIsLoading(true);
-    try {
-      await supabase.auth.signOut();
-    } finally {
-      setUser(null);
-      setAllUsers([]);
-      setIsLoading(false);
-    }
+    await supabase.auth.signOut();
+    setAuth({ user: null, isAuthenticated: false });
   };
 
   const updateUser = async (data: Partial<User>) => {
-    if (!user) return;
-    await supabase.from('profiles').update(data as any).eq('id', user.id);
-    await fetchProfile(user.id);
+    if (!auth.user) return;
+    const { error } = await supabase
+      .from('profiles')
+      .update(data)
+      .eq('id', auth.user.id);
+
+    if (!error) {
+      setAuth(prev => ({ ...prev, user: { ...prev.user!, ...data } }));
+    }
   };
 
-  const deleteUser = async (userId: string) => {
-    await supabase.from('profiles').delete().eq('id', userId);
-    await fetchUsers();
-  };
-
-  const getUserById = (id: string) => allUsers.find(u => u.id === id);
-  const getAllUsers = async () => { await fetchUsers(); return allUsers; };
-  const getPendingUsers = () => allUsers.filter(u => u.verificationStatus === VerificationStatus.PENDING);
-
-  const submitKYC = async (doc: string, self: string) => {
-    if (!user) return;
-    await supabase.from('profiles').update({
-      verification_status: VerificationStatus.PENDING,
-      document_url: doc,
-      selfie_url: self
-    }).eq('id', user.id);
-    await fetchProfile(user.id);
-  };
-
-  const adminApproveKYC = async (uid: string) => {
-    await supabase.from('profiles').update({ verification_status: VerificationStatus.VERIFIED, verified: true }).eq('id', uid);
-    await fetchUsers();
-  };
-
-  const adminRejectKYC = async (uid: string) => {
-    await supabase.from('profiles').update({ verification_status: VerificationStatus.REJECTED }).eq('id', uid);
-    await fetchUsers();
-  };
-
-  const adminUpdateUser = async (uid: string, data: Partial<User>) => {
-    await supabase.from('profiles').update(data as any).eq('id', uid);
-    await fetchUsers();
-  };
-
-  const createCollaborator = async (data: any) => {
-    await register(data);
-  };
-
-  const toggleUserStatus = async (uid: string) => {
-    const u = getUserById(uid);
-    if (!u) return;
-    await supabase.from('profiles').update({ is_active: !u.isActive }).eq('id', uid);
-    await fetchUsers();
-  };
-
-  const confirmarPagamento = async (valor: number) => {
-    if (!user) return;
-    const plan = valor > 10 ? UserPlan.PREMIUM : UserPlan.BASIC;
-    await supabase.from('profiles').update({ plan }).eq('id', user.id);
-    await fetchProfile(user.id);
-  };
-
-  const cancelarAssinatura = async () => {
-    if (!user) return;
-    await supabase.from('profiles').update({ plan: UserPlan.FREE }).eq('id', user.id);
-    await fetchProfile(user.id);
-  };
-
-  const isValidTaxId = (taxId: string, type: UserType) => {
-    const clean = taxId.replace(/\D/g, '');
-    return type === UserType.PF ? clean.length === 11 : clean.length === 14;
+  const adminApproveKYC = async (userId: string) => {
+    await supabase
+      .from('profiles')
+      .update({ verificationStatus: VerificationStatus.VERIFIED, verified: true })
+      .eq('id', userId);
   };
 
   return (
     <AuthContext.Provider value={{ 
-      user, isAuthenticated: !!user, allUsers, isLoading, login, register, logout, updateUser, deleteUser,
-      getUserById, getAllUsers, getPendingUsers, submitKYC, adminApproveKYC, adminRejectKYC,
-      adminUpdateUser, createCollaborator, toggleUserStatus, confirmarPagamento, cancelarAssinatura, isValidTaxId
+      ...auth, login, register, logout, updateUser, adminApproveKYC,
+      getUserById: (id) => usersRegistry.find(u => u.id === id)
     }}>
       {children}
     </AuthContext.Provider>

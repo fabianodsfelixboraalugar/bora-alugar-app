@@ -1,7 +1,6 @@
 
 import React from 'react';
-// Changed import from react-router-dom to react-router
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 
 interface BackButtonProps {
   label?: string;

@@ -1,9 +1,7 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
-// Changed import from react-router-dom to react-router
-import { Link, useNavigate } from 'react-router';
+import React, { useState, useRef, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { useToast } from '../context/ToastContext';
 import { UserType } from '../types';
 import { BackButton } from '../components/BackButton';
 
@@ -25,53 +23,138 @@ export const Register: React.FC = () => {
   });
 
   const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRegistered, setIsRegistered] = useState(false);
+  const { register, isValidTaxId } = useAuth();
+  const navigate = useNavigate();
+  const [error, setError] = useState('');
   const [isLoadingCep, setIsLoadingCep] = useState(false);
   
-  const { register, isValidTaxId } = useAuth();
-  const { showToast } = useToast();
-  const navigate = useNavigate();
+  // Email Suggestions State
+  const [showEmailSuggestions, setShowEmailSuggestions] = useState(false);
+  const [emailSuggestions, setEmailSuggestions] = useState<string[]>([]);
+  const emailInputRef = useRef<HTMLDivElement>(null);
+  
+  const commonDomains = ['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'icloud.com', 'live.com'];
 
-  const passwordCriteria = useMemo(() => ({
-    length: formData.password.length >= 8,
-    upper: /[A-Z]/.test(formData.password),
-    lower: /[a-z]/.test(formData.password),
-    number: /[0-9]/.test(formData.password),
-    special: /[!@#$%^&*(),.?":{}|<>]/.test(formData.password)
-  }), [formData.password]);
+  // --- FUNCIONALIDADE DE TESTE ---
+  const fillTestUser = (role: 'ALUGADOR' | 'LOCATARIO') => {
+    if (role === 'ALUGADOR') {
+      setFormData({
+        name: 'João Alugador Teste',
+        email: 'joao.alugador@teste.com',
+        taxId: '123.456.789-00',
+        userType: UserType.PF,
+        zipCode: '01310-100',
+        address: 'Avenida Paulista',
+        addressNumber: '1000',
+        complement: 'Sala 10',
+        neighborhood: 'Bela Vista',
+        city: 'São Paulo',
+        state: 'SP',
+        password: '123',
+        confirmPassword: '123'
+      });
+    } else {
+      setFormData({
+        name: 'Maria Locatária Teste',
+        email: 'maria.locataria@teste.com',
+        taxId: '987.654.321-11',
+        userType: UserType.PF,
+        zipCode: '22041-001',
+        address: 'Rua Figueiredo de Magalhães',
+        addressNumber: '500',
+        complement: 'Apto 202',
+        neighborhood: 'Copacabana',
+        city: 'Rio de Janeiro',
+        state: 'RJ',
+        password: '123',
+        confirmPassword: '123'
+      });
+    }
+    setAcceptedTerms(true);
+  };
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setFormData({ ...formData, email: value });
+
+    if (value.includes('@')) {
+      const [localPart, domainPart] = value.split('@');
+      const filtered = commonDomains
+        .filter(d => d.startsWith(domainPart.toLowerCase()))
+        .map(d => `${localPart}@${d}`);
+      
+      setEmailSuggestions(filtered);
+      setShowEmailSuggestions(filtered.length > 0);
+    } else {
+      setShowEmailSuggestions(false);
+    }
+  };
+
+  const selectEmailSuggestion = (suggestion: string) => {
+    setFormData({ ...formData, email: suggestion });
+    setShowEmailSuggestions(false);
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (emailInputRef.current && !emailInputRef.current.contains(event.target as Node)) {
+        setShowEmailSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const maskTaxId = (value: string) => {
     const clean = value.replace(/\D/g, '');
     if (formData.userType === UserType.PF) {
-      return clean.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})/, '$1-$2').slice(0, 14);
+      return clean
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d)/, '$1.$2')
+        .replace(/(\d{3})(\d{1,2})/, '$1-$2')
+        .slice(0, 14);
     } else {
-      return clean.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2').slice(0, 18);
+      return clean
+        .replace(/^(\d{2})(\d)/, '$1.$2')
+        .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/\.(\d{3})(\d)/, '.$1/$2')
+        .replace(/(\d{4})(\d)/, '$1-$2')
+        .slice(0, 18);
     }
   };
 
+  const maskCEP = (value: string) => {
+    return value
+      .replace(/\D/g, '')
+      .replace(/^(\d{5})(\d)/, '$1-$2')
+      .slice(0, 9);
+  };
+
   const handleZipCodeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, '').replace(/^(\d{5})(\d)/, '$1-$2').slice(0, 9);
-    setFormData(prev => ({ ...prev, zipCode: value }));
-    const cleanCep = value.replace(/\D/g, '');
-    
+    const maskedValue = maskCEP(e.target.value);
+    setFormData(prev => ({ ...prev, zipCode: maskedValue }));
+
+    const cleanCep = maskedValue.replace(/\D/g, '');
     if (cleanCep.length === 8) {
       setIsLoadingCep(true);
+      setError('');
       try {
         const response = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
         const data = await response.json();
+        
         if (!data.erro) {
-          setFormData(prev => ({ 
-            ...prev, 
-            address: data.logradouro || '', 
-            neighborhood: data.bairro || '', 
-            city: data.localidade || '', 
-            state: data.uf || '' 
+          setFormData(prev => ({
+            ...prev,
+            address: data.logradouro || '',
+            neighborhood: data.bairro || '',
+            city: data.localidade || '',
+            state: data.uf || ''
           }));
+        } else {
+          setError('CEP não encontrado. Verifique os números.');
         }
       } catch (err) {
-        console.warn("Erro ao buscar CEP");
+        setError('Erro ao validar CEP. Verifique sua conexão.');
       } finally {
         setIsLoadingCep(false);
       }
@@ -80,63 +163,46 @@ export const Register: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting) return;
-    
-    if (!acceptedTerms) { showToast("Aceite os termos para continuar.", 'warning'); return; }
-    if (!isValidTaxId(formData.taxId, formData.userType)) { showToast("Documento (CPF/CNPJ) inválido.", 'error'); return; }
-    if (!Object.values(passwordCriteria).every(Boolean)) { showToast("A senha deve ser mais forte.", 'warning'); return; }
-    if (formData.password !== formData.confirmPassword) { showToast("As senhas não coincidem.", 'error'); return; }
+    setError('');
 
-    setIsSubmitting(true);
-    try {
-      const result = await register({ ...formData });
-      
-      if (result.success) {
-        if (result.needsConfirmation) {
-          setIsRegistered(true);
-          showToast("Cadastro realizado! Verifique seu e-mail.", 'info');
-        } else {
-          showToast("Cadastro realizado com sucesso!", 'success');
-          navigate('/login');
-        }
-      } else {
-        const msg = result.message || "";
-        if (msg.includes('already registered')) {
-          showToast("E-mail já cadastrado. Tente fazer login.", 'error');
-        } else {
-          showToast(msg, 'error');
-        }
-      }
-    } catch (err: any) {
-      showToast("Falha na comunicação com o servidor.", 'error');
-    } finally {
-      setIsSubmitting(false);
+    if (!acceptedTerms) {
+      setError("Você deve aceitar os Termos de Uso e a Política de Privacidade para continuar.");
+      return;
     }
+
+    if (!isValidTaxId(formData.taxId, formData.userType)) {
+      setError(`O ${formData.userType === UserType.PF ? 'CPF' : 'CNPJ'} inserido é inválido.`);
+      return;
+    }
+
+    if (!formData.password) {
+      setError("A senha é obrigatória.");
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError("As senhas não coincidem.");
+      return;
+    }
+
+    await register({
+      name: formData.name,
+      email: formData.email,
+      [formData.userType === UserType.PF ? 'cpf' : 'cnpj']: formData.taxId,
+      userType: formData.userType,
+      zipCode: formData.zipCode,
+      address: formData.address,
+      addressNumber: formData.addressNumber,
+      complement: formData.complement,
+      neighborhood: formData.neighborhood,
+      city: formData.city,
+      state: formData.state
+    });
+    
+    navigate('/dashboard');
   };
 
-  if (isRegistered) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4 py-12">
-        <div className="max-w-md w-full bg-white rounded-[3.5rem] shadow-2xl p-12 border border-brand-100 text-center animate-fadeIn">
-          <div className="w-24 h-24 bg-brand-50 rounded-full flex items-center justify-center mx-auto mb-8 border-2 border-brand-100 shadow-inner">
-            <i className="fas fa-paper-plane text-brand-500 text-4xl animate-bounce"></i>
-          </div>
-          <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight mb-4">Quase lá!</h2>
-          <p className="text-gray-500 text-sm font-medium leading-relaxed mb-8">
-            Enviamos um link de ativação para <br/><span className="text-brand-600 font-bold">{formData.email}</span>.<br/> 
-            Acesse seu e-mail para confirmar sua conta e começar a alugar.
-          </p>
-          <div className="space-y-4">
-            <Link to="/login" className="block w-full bg-brand-500 text-white font-black py-5 rounded-[2rem] shadow-xl hover:bg-brand-600 transition transform active:scale-95 uppercase text-xs tracking-widest">
-              Ir para o Login
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const inputStyle = "w-full bg-white border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-brand-500 text-gray-800 transition-all text-sm font-medium shadow-sm";
+  const inputStyle = "w-full bg-white border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-brand-500 text-gray-800 transition-all shadow-sm";
   const labelStyle = "block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1";
 
   return (
@@ -145,80 +211,209 @@ export const Register: React.FC = () => {
         <BackButton label="Voltar" />
       </div>
 
-      <div className="max-w-2xl w-full bg-white rounded-[3rem] shadow-xl p-10 border border-brand-100 animate-fadeIn">
+      <div className="max-w-2xl w-full bg-white rounded-3xl shadow-xl p-10 border border-brand-100 animate-fadeIn relative">
+        
+        {/* BOTÕES DE TESTE RÁPIDO */}
+        <div className="absolute top-6 left-6 flex gap-2 z-20">
+          <button 
+            type="button"
+            onClick={() => fillTestUser('ALUGADOR')}
+            className="bg-brand-50 hover:bg-brand-100 text-brand-700 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-tighter border border-brand-200 shadow-sm transition"
+          >
+            <i className="fas fa-magic mr-1"></i> Alugador
+          </button>
+          <button 
+            type="button"
+            onClick={() => fillTestUser('LOCATARIO')}
+            className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-tighter border border-blue-200 shadow-sm transition"
+          >
+            <i className="fas fa-magic mr-1"></i> Locatário
+          </button>
+        </div>
+
         <div className="text-center mb-10">
+          <div className="w-16 h-16 bg-brand-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-brand-200">
+             <i className="fas fa-user-plus text-brand-600 text-2xl"></i>
+          </div>
           <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight">Criar Conta</h2>
-          <p className="text-gray-400 text-xs font-bold uppercase mt-2 tracking-widest">Junte-se à comunidade Bora Alugar</p>
+          <p className="text-gray-500 mt-2 font-medium">Junte-se à comunidade Bora Alugar hoje mesmo.</p>
         </div>
         
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid grid-cols-2 gap-4 bg-gray-50 p-2 rounded-2xl">
-              <button type="button" onClick={() => setFormData({...formData, userType: UserType.PF})} className={`py-3 rounded-xl font-black text-xs uppercase transition ${formData.userType === UserType.PF ? 'bg-brand-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>Pessoa Física</button>
-              <button type="button" onClick={() => setFormData({...formData, userType: UserType.PJ})} className={`py-3 rounded-xl font-black text-xs uppercase transition ${formData.userType === UserType.PJ ? 'bg-brand-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}>Pessoa Jurídica</button>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="grid grid-cols-2 gap-4 bg-gray-50 p-2 rounded-2xl mb-2">
+              <button 
+                type="button"
+                onClick={() => setFormData({...formData, userType: UserType.PF})}
+                className={`py-3 rounded-xl font-bold transition ${formData.userType === UserType.PF ? 'bg-brand-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                  Pessoa Física
+              </button>
+              <button 
+                type="button"
+                onClick={() => setFormData({...formData, userType: UserType.PJ})}
+                className={`py-3 rounded-xl font-bold transition ${formData.userType === UserType.PJ ? 'bg-brand-500 text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+              >
+                  Pessoa Jurídica
+              </button>
           </div>
 
           <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                      <label className={labelStyle}>Nome Completo</label>
-                      <input type="text" required className={inputStyle} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                      <label className={labelStyle}>Nome Completo / Razão Social</label>
+                      <input 
+                        type="text" required
+                        className={inputStyle}
+                        value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
+                      />
                   </div>
-                  <div>
-                      <label className={labelStyle}>E-mail</label>
-                      <input type="email" required className={inputStyle} value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                  <div className="relative" ref={emailInputRef}>
+                      <label className={labelStyle}>Email de Contato</label>
+                      <input 
+                        type="email" required
+                        className={inputStyle}
+                        value={formData.email} 
+                        onChange={handleEmailChange}
+                        autoComplete="off"
+                      />
+                      {showEmailSuggestions && (
+                        <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl py-2 animate-fadeIn max-h-48 overflow-y-auto">
+                          {emailSuggestions.map((suggestion, idx) => (
+                            <button
+                              key={idx}
+                              type="button"
+                              className="w-full text-left px-4 py-2.5 text-xs font-bold text-gray-600 hover:bg-brand-50 hover:text-brand-600 transition"
+                              onClick={() => selectEmailSuggestion(suggestion)}
+                            >
+                              {suggestion}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                   </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                       <label className={labelStyle}>{formData.userType === UserType.PF ? 'CPF' : 'CNPJ'}</label>
-                      <input type="text" required className={inputStyle} value={formData.taxId} onChange={e => setFormData({...formData, taxId: maskTaxId(e.target.value)})} />
+                      <input 
+                        type="text" required
+                        className={inputStyle}
+                        value={formData.taxId} onChange={e => setFormData({...formData, taxId: maskTaxId(e.target.value)})}
+                      />
                   </div>
-                  <div>
-                      <label className={labelStyle}>CEP</label>
-                      <div className="relative">
-                        <input type="text" required className={inputStyle} value={formData.zipCode} onChange={handleZipCodeChange} placeholder="00000-000" />
-                        {isLoadingCep && <i className="fas fa-spinner fa-spin absolute right-4 top-1/2 -translate-y-1/2 text-brand-500"></i>}
-                      </div>
+                  <div className="relative">
+                      <label className={labelStyle + " flex justify-between items-center"}>
+                        CEP
+                        {isLoadingCep && <i className="fas fa-sync-alt fa-spin text-brand-500 text-[12px]"></i>}
+                      </label>
+                      <input 
+                        type="text" required
+                        className={inputStyle}
+                        value={formData.zipCode} onChange={handleZipCodeChange}
+                        placeholder="00000-000"
+                      />
                   </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                  <div className="space-y-3">
+              <div>
+                  <label className={labelStyle}>Logradouro (Rua/Av)</label>
+                  <input 
+                    type="text" required
+                    className={inputStyle}
+                    value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})}
+                  />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                      <label className={labelStyle}>Número</label>
+                      <input 
+                        type="text" required
+                        className={inputStyle}
+                        value={formData.addressNumber} onChange={e => setFormData({...formData, addressNumber: e.target.value})}
+                      />
+                  </div>
+                  <div>
+                      <label className={labelStyle}>Complemento</label>
+                      <input 
+                        type="text"
+                        className={inputStyle}
+                        value={formData.complement} onChange={e => setFormData({...formData, complement: e.target.value})}
+                      />
+                  </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                      <label className={labelStyle}>Bairro</label>
+                      <input 
+                        type="text" required
+                        className={inputStyle}
+                        value={formData.neighborhood} onChange={e => setFormData({...formData, neighborhood: e.target.value})}
+                      />
+                  </div>
+                  <div>
+                      <label className={labelStyle}>Cidade</label>
+                      <input 
+                        type="text" required
+                        className={inputStyle}
+                        value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})}
+                      />
+                  </div>
+                  <div>
+                      <label className={labelStyle}>UF</label>
+                      <input 
+                        type="text" required maxLength={2}
+                        className={inputStyle + " uppercase"}
+                        value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})}
+                      />
+                  </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
                       <label className={labelStyle}>Senha</label>
-                      <div className="relative">
-                        <input type={showPassword ? "text" : "password"} required className={inputStyle} value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} />
-                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-500 transition-colors">
-                          <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
-                        </button>
-                      </div>
+                      <input 
+                        type="password" required
+                        className={inputStyle}
+                        value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})}
+                      />
                   </div>
                   <div>
                       <label className={labelStyle}>Confirmar Senha</label>
-                      <input type="password" required className={inputStyle} value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})} />
+                      <input 
+                        type="password" required
+                        className={inputStyle}
+                        value={formData.confirmPassword} onChange={e => setFormData({...formData, confirmPassword: e.target.value})}
+                      />
                   </div>
               </div>
           </div>
 
-          <div className="flex items-start gap-3 p-2 bg-gray-50 rounded-2xl border border-gray-100">
-            <input id="accept-terms-reg" type="checkbox" checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} className="mt-1 w-5 h-5 text-brand-600 rounded cursor-pointer" />
-            <label htmlFor="accept-terms-reg" className="text-[10px] text-gray-400 font-black uppercase leading-relaxed cursor-pointer select-none">
-              Concordo com os Termos e Políticas de Privacidade.
+          <div className="flex items-start gap-3 p-2">
+            <input 
+              id="accept-terms-register"
+              type="checkbox" 
+              checked={acceptedTerms} 
+              onChange={e => setAcceptedTerms(e.target.checked)}
+              className="mt-1 w-5 h-5 text-brand-600 border-gray-300 rounded focus:ring-brand-500 cursor-pointer"
+            />
+            <label htmlFor="accept-terms-register" className="text-xs text-gray-500 font-medium leading-relaxed cursor-pointer select-none">
+              Li e concordo com os <Link to="/termos" className="text-brand-600 hover:underline">Termos de Uso</Link> e a <Link to="/privacidade" className="text-brand-600 hover:underline">Política de Privacidade</Link>.
             </label>
           </div>
 
-          <button 
-            type="submit" 
-            disabled={isSubmitting}
-            className={`w-full text-white font-black py-5 rounded-[2rem] shadow-xl transition transform active:scale-[0.98] uppercase tracking-[0.1em] text-sm ${isSubmitting ? 'bg-gray-400 cursor-wait' : 'bg-brand-500 hover:bg-brand-600 shadow-brand-100'}`}
-          >
-            {isSubmitting ? <span className="flex items-center justify-center gap-2"><i className="fas fa-spinner fa-spin mr-2"></i> PROCESSANDO...</span> : 'Finalizar Cadastro'}
+          {error && <p className="text-red-500 text-[10px] font-black uppercase tracking-tight text-center animate-pulse"><i className="fas fa-exclamation-triangle mr-1"></i> {error}</p>}
+
+          <button type="submit" className="w-full bg-brand-500 hover:bg-brand-600 text-white font-black py-4 rounded-2xl shadow-lg transition transform active:scale-95 uppercase tracking-widest mt-4">
+            Cadastrar Gratuitamente
           </button>
-          
-          <div className="text-center text-[10px] font-black text-gray-300 uppercase tracking-widest">
-            Já tem uma conta? <Link to="/login" className="text-brand-500 hover:underline">Fazer Login</Link>
-          </div>
         </form>
+        
+        <div className="mt-8 text-center text-sm font-bold text-gray-400">
+          Já tem conta? <Link to="/login" className="text-brand-600 hover:underline ml-1">Entrar</Link>
+        </div>
       </div>
     </div>
   );
