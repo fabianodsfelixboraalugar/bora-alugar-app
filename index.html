@@ -1,32 +1,88 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#84cc16" />
     <meta name="description" content="Bora Alugar - A plataforma completa para alugar qualquer coisa." />
-
-    <!-- PWA -->
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-
-    <!-- iOS -->
+    
+    <!-- iOS specific meta tags for native feel -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Bora Alugar">
     <meta name="format-detection" content="telephone=no">
-
+    
+    <!-- crossorigin="use-credentials" resolve o erro 401 em deploys protegidos da Vercel -->
+    <link rel="manifest" href="./manifest.json" crossorigin="use-credentials" />
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1042/1042390.png">
+    
     <title>Bora Alugar - Alugue o que precisar</title>
-
-    <!-- Tailwind (temporário) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
-
-    <link rel="stylesheet" href="/index.css">
-  </head>
-
-  <body class="bg-gray-50 text-slate-800 antialiased">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                50: '#f7fee7',
+                100: '#ecfccb',
+                500: '#84cc16', 
+                600: '#65a30d',
+                700: '#4d7c0f',
+                900: '#365314',
+              },
+              secondary: {
+                500: '#f97316',
+                600: '#ea580c',
+              }
+            },
+            screens: {
+              'standalone': { 'raw': '(display-mode: standalone)' },
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      :root {
+        --sat: env(safe-area-inset-top);
+        --sab: env(safe-area-inset-bottom);
+        --sal: env(safe-area-inset-left);
+        --sar: env(safe-area-inset-right);
+      }
+      html { overscroll-behavior-y: none; -webkit-text-size-adjust: 100%; -webkit-touch-callout: none; }
+      body { overscroll-behavior-y: none; background-color: #f9fafb; -webkit-user-select: none; user-select: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      input:not([type="checkbox"]):not([type="radio"]), textarea, select { background-color: #ffffff !important; color: #1f2937 !important; border: 1px solid #d1d5db !important; }
+      input, textarea { -webkit-user-select: text; user-select: text; }
+      * { -webkit-tap-highlight-color: transparent; }
+      ::-webkit-scrollbar { width: 6px; }
+      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.1/",
+    "react": "https://esm.sh/react@^19.2.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.10.1",
+    "@google/genai": "https://esm.sh/@google/genai@^1.32.0",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.3",
+    "idb-keyval": "https://esm.sh/idb-keyval@6.2.1",
+    "jspdf": "https://esm.sh/jspdf@2.5.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "vite": "https://esm.sh/vite@^7.3.1"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-gray-50 text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-900">
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
-  </body>
+  <script type="module" src="/index.tsx"></script>
+</body>
 </html>
