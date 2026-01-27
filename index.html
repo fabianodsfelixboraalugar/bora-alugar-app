@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#84cc16" />
     <meta name="description" content="Bora Alugar - A plataforma completa para alugar qualquer coisa." />
     
-    <!-- PWA: O manifest deve ser referenciado com caminho absoluto para a raiz -->
+    <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
     
     <!-- iOS support -->
@@ -34,11 +34,10 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
   <body class="bg-gray-50 text-slate-800 antialiased">
     <div id="root"></div>
-    <!-- No Vite, o script aponta diretamente para o arquivo TSX, o Vite faz a transpilação -->
+    <!-- O Vite transformará este index.tsx no bundle final durante o build -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
