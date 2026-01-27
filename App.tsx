@@ -23,17 +23,6 @@ import { CookiePolicy } from './pages/CookiePolicy';
 import { InstallPwaNotification } from './components/InstallPwaNotification';
 import { CookieConsent } from './components/CookieConsent';
 import { isSupabaseConfigured } from './lib/supabase';
-import { Logo } from './components/Logo';
-
-const LoadingScreen: React.FC = () => (
-  <div className="fixed inset-0 bg-white z-[999] flex flex-col items-center justify-center p-6 animate-fadeIn">
-    <div className="flex flex-col items-center">
-      <Logo className="h-24 mb-8 animate-pulse" />
-      <div className="w-12 h-12 border-4 border-brand-100 border-t-brand-500 rounded-full animate-spin"></div>
-      <p className="mt-6 text-gray-400 font-black text-[10px] uppercase tracking-[0.3em] animate-pulse">Iniciando sistema...</p>
-    </div>
-  </div>
-);
 
 const ConfigErrorScreen: React.FC<{ type?: 'config' | 'network' }> = ({ type = 'config' }) => (
   <div className="min-h-screen bg-brand-900 flex items-center justify-center p-6 text-center">
@@ -61,22 +50,17 @@ const ConfigErrorScreen: React.FC<{ type?: 'config' | 'network' }> = ({ type = '
 
 const AppContent: React.FC = () => {
   const { networkError, isLoading: isDataLoading } = useData();
-  const { isLoading: isAuthLoading } = useAuth();
 
   if (networkError) {
     return <ConfigErrorScreen type="network" />;
   }
 
-  // Só bloqueia a UI se a autenticação ainda estiver carregando (estado inicial crítico)
-  // Após a primeira resposta do Auth, permitimos que os dados sincronizem em background
-  const showFullSplash = isAuthLoading;
-
   return (
     <div className="flex flex-col min-h-screen font-sans text-gray-800">
-      {showFullSplash && <LoadingScreen />}
       <Navbar />
       <main className="flex-grow">
-        {isDataLoading && !showFullSplash && (
+        {/* Barra de progresso discreta apenas se os dados ainda estiverem carregando em background */}
+        {isDataLoading && (
           <div className="h-1 bg-brand-100 overflow-hidden fixed top-20 left-0 right-0 z-50">
             <div className="h-full bg-brand-500 animate-[progress_2s_ease-in-out_infinite] w-1/3"></div>
           </div>
