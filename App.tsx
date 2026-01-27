@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { HashRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
+// Changed import from react-router-dom to react-router for unified export support
+import { HashRouter, Routes, Route, Navigate, Link } from 'react-router';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider, useData } from './context/DataContext';
 import { ToastProvider } from './context/ToastContext';
@@ -59,10 +60,10 @@ const AppContent: React.FC = () => {
     <div className="flex flex-col min-h-screen font-sans text-gray-800">
       <Navbar />
       <main className="flex-grow">
-        {/* Barra de progresso discreta no topo enquanto os dados carregam em background */}
+        {/* Barra de progresso não intrusiva se dados carregarem em background */}
         {isDataLoading && (
-          <div className="h-1 bg-brand-100 overflow-hidden fixed top-20 left-0 right-0 z-50">
-            <div className="h-full bg-brand-500 animate-[progress_2s_ease-in-out_infinite] w-1/3"></div>
+          <div className="h-0.5 bg-brand-100 overflow-hidden fixed top-20 left-0 right-0 z-50">
+            <div className="h-full bg-brand-500 animate-[progress_2s_ease-in-out_infinite] w-1/4"></div>
           </div>
         )}
         <Routes>
@@ -109,14 +110,10 @@ const AppContent: React.FC = () => {
 
 const AdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isAuthenticated, isLoading } = useAuth();
-  
-  // No caso de rotas protegidas (Admin), aguardamos o auth carregar, mas sem travar o resto do app
-  if (isLoading) return null;
+  if (isLoading) return null; // Apenas guards bloqueiam, para evitar falso negativo
   if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
-  
   const isAuthorized = user.isActive !== false && (user.role === 'ADMIN' || !!user.jobTitle || user.id.startsWith('colab_'));
   if (!isAuthorized) return <Navigate to="/" replace />;
-  
   return <>{children}</>;
 };
 
@@ -137,4 +134,3 @@ function App() {
 }
 
 export default App;
-

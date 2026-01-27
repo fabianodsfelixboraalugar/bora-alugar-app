@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+// Changed import from react-router-dom to react-router
+import { useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { RentalStatus, VerificationStatus, Rental, Item, User, UserType, ItemStatus, UserPlan } from '../types';

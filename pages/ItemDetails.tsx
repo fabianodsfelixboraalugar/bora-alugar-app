@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+// Changed import from react-router-dom to react-router
+import { useParams, useNavigate } from 'react-router';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Rental, RentalStatus, VerificationStatus, ItemStatus } from '../types';
@@ -143,7 +144,7 @@ export const ItemDetails: React.FC = () => {
                 <h3 className="text-xl font-black text-gray-900 uppercase tracking-tighter">Contrato de Aluguel</h3>
                 <button onClick={() => setShowContractModal(false)} className="text-gray-400 hover:text-gray-600"><i className="fas fa-times text-xl"></i></button>
              </div>
-             <div className="p-8 overflow-y-auto flex-1 space-y-4">
+             <div className="p-8 overflow-y-auto flex-1 space-y-4 no-scrollbar">
                 <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100">
                    <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap font-medium">
                       {item.contractTerms || "O proprietário não definiu termos específicos extras para este contrato. Valem as regras gerais da plataforma."}
@@ -219,7 +220,6 @@ export const ItemDetails: React.FC = () => {
                     </button>
                 ))}
                 
-                {/* Thumbnail do Vídeo na Galeria - MANTIDO conforme solicitado */}
                 {videoData && (
                     <button 
                         onClick={() => setActiveMedia(item.images.length)}

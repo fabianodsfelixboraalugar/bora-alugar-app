@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
-import { Item, Rental, Review, Message, Notification, NotificationType, RentalStatus, AppLog, Category, ItemStatus } from '../types';
+import { Item, Rental, Review, Message, Notification, NotificationType, RentalStatus, AppLog } from '../types';
 
 interface DataContextType {
   items: Item[];
@@ -49,93 +49,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [messages, setMessages] = useState<Message[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [logs, setLogs] = useState<AppLog[]>([]);
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [networkError, setNetworkError] = useState(false);
-
-  const fetchData = useCallback(async () => {
-    if (!user) {
-      setRentals([]);
-      setMessages([]);
-      setNotifications([]);
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const [
-        { data: itemsRaw },
-        { data: rentalsRaw },
-        { data: notificationsRaw },
-        { data: messagesRaw },
-        { data: reviewsRaw }
-      ] = await Promise.all([
-        supabase.from('items').select('*').order('created_at', { ascending: false }),
-        supabase.from('rentals').select('*').order('created_at', { ascending: false }),
-        supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('messages').select('*').or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order('timestamp', { ascending: true }),
-        supabase.from('reviews').select('*').order('date', { ascending: false })
-      ]);
-
-      setItems((itemsRaw?.map((i: any) => ({
-        ...i,
-        ownerId: i.owner_id,
-        ownerName: i.owner_name,
-        contractTerms: i.contract_terms,
-        videoUrl: i.video_url,
-        pricePerDay: i.price_per_day,
-        createdAt: i.created_at,
-        reviewCount: i.review_count,
-        deliveryConfig: i.delivery_config
-      })) as Item[]) || []);
-
-      setRentals((rentalsRaw?.map((r: any) => ({
-        ...r,
-        itemId: r.item_id,
-        itemTitle: r.item_title,
-        itemImage: r.item_image,
-        renterId: r.renter_id,
-        ownerId: r.owner_id,
-        startDate: r.start_date,
-        endDate: r.end_date,
-        totalPrice: r.total_price,
-        createdAt: r.created_at,
-        deliveryInfo: r.delivery_info,
-        contractAccepted: r.contract_accepted
-      })) as Rental[]) || []);
-
-      setNotifications((notificationsRaw?.map((n: any) => ({
-        ...n,
-        userId: n.user_id,
-        createdAt: n.created_at
-      })) as Notification[]) || []);
-
-      setMessages((messagesRaw?.map((m: any) => ({
-        ...m,
-        senderId: m.sender_id,
-        receiverId: m.receiver_id
-      })) as Message[]) || []);
-
-      setReviews((reviewsRaw?.map((rv: any) => ({
-        ...rv,
-        transactionId: rv.transaction_id,
-        itemId: rv.item_id,
-        reviewerId: rv.reviewer_id,
-        reviewedId: rv.reviewed_id,
-        reviewerName: rv.reviewer_name,
-        isAnonymous: rv.is_anonymous
-      })) as Review[]) || []);
-
-      setNetworkError(false);
-    } catch (error: any) {
-      console.error("Erro ao sincronizar dados:", error);
-      // Não ativamos erro de rede se for apenas um erro de permissão (RLS)
-      if (error.code !== 'PGRST116') setNetworkError(true);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user]);
 
   const fetchPublicItems = async () => {
     try {
@@ -150,9 +66,51 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         })) as Item[]);
       }
     } catch (e) {
-      console.error("Erro ao carregar itens públicos:", e);
+      console.warn("Erro ao carregar itens públicos.");
     }
   };
+
+  const fetchData = useCallback(async () => {
+    if (!user) return;
+    setIsLoading(true);
+    try {
+      const [
+        { data: rentalsRaw },
+        { data: notificationsRaw },
+        { data: messagesRaw },
+        { data: reviewsRaw }
+      ] = await Promise.all([
+        supabase.from('rentals').select('*').order('created_at', { ascending: false }),
+        supabase.from('notifications').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('messages').select('*').or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`).order('timestamp', { ascending: true }),
+        supabase.from('reviews').select('*').order('date', { ascending: false })
+      ]);
+
+      if (rentalsRaw) setRentals(rentalsRaw.map((r: any) => ({
+        ...r, itemId: r.item_id, itemTitle: r.item_title, itemImage: r.item_image,
+        renterId: r.renter_id, ownerId: r.owner_id, startDate: r.start_date, endDate: r.end_date,
+        totalPrice: r.total_price, createdAt: r.created_at, deliveryInfo: r.delivery_info
+      })) as Rental[]);
+
+      if (notificationsRaw) setNotifications(notificationsRaw.map((n: any) => ({
+        ...n, userId: n.user_id, createdAt: n.created_at
+      })) as Notification[]);
+
+      if (messagesRaw) setMessages(messagesRaw.map((m: any) => ({
+        ...m, senderId: m.sender_id, receiverId: m.receiver_id
+      })) as Message[]);
+
+      if (reviewsRaw) setReviews(reviewsRaw.map((rv: any) => ({
+        ...rv, transactionId: rv.transaction_id, itemId: rv.item_id, reviewerId: rv.reviewer_id, reviewedId: rv.reviewed_id
+      })) as Review[]);
+
+      setNetworkError(false);
+    } catch (error) {
+      console.error("Erro ao sincronizar dados privados.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
 
   useEffect(() => {
     fetchPublicItems();
@@ -165,63 +123,42 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .on('postgres_changes', { event: '*', schema: 'public' }, () => fetchData())
         .subscribe();
       return () => { supabase.removeChannel(channel); };
+    } else {
+      setRentals([]);
+      setMessages([]);
+      setNotifications([]);
     }
   }, [user, fetchData]);
 
   const addItem = async (itemData: any) => {
-    const { error } = await supabase.from('items').insert([{
-      id: itemData.id,
-      owner_id: itemData.ownerId,
-      owner_name: itemData.ownerName,
-      title: itemData.title,
-      category: itemData.category,
-      description: itemData.description,
-      contract_terms: itemData.contractTerms,
-      images: itemData.images,
-      video_url: itemData.videoUrl,
-      price_per_day: itemData.pricePerDay,
-      city: itemData.city,
-      state: itemData.state,
-      available: true,
-      status: 'Disponível',
-      delivery_config: itemData.deliveryConfig
+    await supabase.from('items').insert([{
+      id: itemData.id, owner_id: itemData.ownerId, owner_name: itemData.ownerName,
+      title: itemData.title, category: itemData.category, description: itemData.description,
+      images: itemData.images, price_per_day: itemData.pricePerDay, city: itemData.city,
+      state: itemData.state, available: true, delivery_config: itemData.deliveryConfig
     }]);
-    if (error) throw error;
-    await fetchData();
+    await fetchPublicItems();
   };
 
   const removeItem = async (itemId: string) => {
     await supabase.from('items').delete().eq('id', itemId);
-    await fetchData();
+    await fetchPublicItems();
   };
 
   const updateItem = async (itemId: string, data: Partial<Item>) => {
-    const dbData: any = {};
-    if (data.title) dbData.title = data.title;
-    if (data.available !== undefined) dbData.available = data.available;
-    if (data.status) dbData.status = data.status;
-    await supabase.from('items').update(dbData).eq('id', itemId);
-    await fetchData();
+    await supabase.from('items').update(data as any).eq('id', itemId);
+    await fetchPublicItems();
   };
 
   const getItemById = (id: string) => items.find(i => i.id === id);
 
   const addRental = async (rentalData: any) => {
-    const { error } = await supabase.from('rentals').insert([{
-      id: rentalData.id,
-      item_id: rentalData.itemId,
-      item_title: rentalData.itemTitle,
-      item_image: rentalData.itemImage,
-      renter_id: rentalData.renterId,
-      owner_id: rentalData.ownerId,
-      start_date: rentalData.startDate,
-      end_date: rentalData.endDate,
-      total_price: rentalData.totalPrice,
-      status: rentalData.status,
-      delivery_info: rentalData.deliveryInfo,
-      contract_accepted: rentalData.contractAccepted
+    await supabase.from('rentals').insert([{
+      id: rentalData.id, item_id: rentalData.itemId, item_title: rentalData.itemTitle,
+      item_image: rentalData.itemImage, renter_id: rentalData.renterId, owner_id: rentalData.ownerId,
+      start_date: rentalData.startDate, end_date: rentalData.endDate, total_price: rentalData.totalPrice,
+      status: rentalData.status, delivery_info: rentalData.deliveryInfo
     }]);
-    if (error) throw error;
     await fetchData();
   };
 
@@ -237,20 +174,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const start = new Date(startDate);
     const end = new Date(endDate);
     return !rentals.some(r => 
-      r.itemId === itemId && 
-      r.status !== RentalStatus.CANCELLED &&
+      r.itemId === itemId && r.status !== RentalStatus.CANCELLED &&
       ((start >= new Date(r.startDate) && start <= new Date(r.endDate)) ||
        (end >= new Date(r.startDate) && end <= new Date(r.endDate)))
     );
   };
 
   const sendMessage = async (senderId: string, receiverId: string, content: string) => {
-    await supabase.from('messages').insert([{
-      sender_id: senderId,
-      receiver_id: receiverId,
-      content,
-      read: false
-    }]);
+    await supabase.from('messages').insert([{ sender_id: senderId, receiver_id: receiverId, content, read: false }]);
     await fetchData();
   };
 
@@ -260,11 +191,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteMessage = async (id: string) => {
     await supabase.from('messages').delete().eq('id', id);
+    await fetchData();
   };
 
   const deleteConversation = async (u1: string, u2: string) => {
-    await supabase.from('messages').delete()
-      .or(`and(sender_id.eq.${u1},receiver_id.eq.${u2}),and(sender_id.eq.${u2},receiver_id.eq.${u1})`);
+    await supabase.from('messages').delete().or(`and(sender_id.eq.${u1},receiver_id.eq.${u2}),and(sender_id.eq.${u2},receiver_id.eq.${u1})`);
     await fetchData();
   };
 
@@ -274,9 +205,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addNotification = async (userId: string, type: NotificationType, title: string, message: string, link: string) => {
-    await supabase.from('notifications').insert([{ 
-      user_id: userId, type, title, message, link, read: false 
-    }]);
+    await supabase.from('notifications').insert([{ user_id: userId, type, title, message, link, read: false }]);
     await fetchData();
   };
 
@@ -292,17 +221,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const submitReview = async (review: any) => {
     await supabase.from('reviews').insert([{
-      transaction_id: review.transactionId,
-      item_id: review.itemId,
-      reviewer_id: review.reviewerId,
-      reviewed_id: review.reviewedId,
-      reviewer_name: review.reviewerName,
-      role: review.role,
-      rating: review.rating,
-      comment: review.comment,
-      is_anonymous: review.isAnonymous,
-      criteria: review.criteria,
-      tags: review.tags
+      transaction_id: review.transactionId, item_id: review.itemId, reviewer_id: review.reviewerId,
+      reviewed_id: review.reviewedId, reviewer_name: review.reviewerName, rating: review.rating,
+      comment: review.comment, is_anonymous: review.isAnonymous
     }]);
     await fetchData();
   };
@@ -314,9 +235,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return Math.round(R * c);
   };
@@ -324,21 +243,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteUserData = async (userId: string) => {
     await Promise.all([
       supabase.from('items').delete().eq('owner_id', userId),
-      supabase.from('rentals').delete().or(`renter_id.eq.${userId},owner_id.eq.${userId}`),
-      supabase.from('profiles').delete().eq('id', userId)
+      supabase.from('rentals').delete().or(`renter_id.eq.${userId},owner_id.eq.${userId}`)
     ]);
     await fetchData();
   };
 
-  const clearLogs = async () => {};
-
   return (
     <DataContext.Provider value={{ 
-      items, rentals, messages, notifications, reviews, logs, userLocation, isLoading, networkError,
+      items, rentals, messages, notifications, reviews, logs: [], userLocation, isLoading, networkError,
       setUserLocation, addItem, removeItem, updateItem, getItemById, addRental, updateRentalStatus, 
       getRentalsByUserId, getRentalsByOwnerId, checkItemAvailability, sendMessage, markAsRead, 
       deleteMessage, deleteConversation, clearAllMessages, addNotification, markNotificationAsRead, 
-      clearNotifications, submitReview, getReviewByTransaction, calculateDistance, deleteUserData, clearLogs,
+      clearNotifications, submitReview, getReviewByTransaction, calculateDistance, deleteUserData, clearLogs: async () => {},
       refreshData: fetchData
     }}>
       {children}

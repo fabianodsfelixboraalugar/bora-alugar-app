@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+// Changed import from react-router-dom to react-router to support consolidated exports
+import { useNavigate } from 'react-router';
 import { GoogleGenAI } from "@google/genai";
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
@@ -17,6 +18,8 @@ export const Home: React.FC = () => {
   const [locationStatus, setLocationStatus] = useState<'prompt' | 'loading' | 'success' | 'denied' | 'error'>('prompt');
   const [currentCity, setCurrentCity] = useState<string>('');
   const [searchRadius, setSearchRadius] = useState<number>(50);
+  // Added state to store grounding links as required by Maps grounding instructions
+  const [groundingLinks, setGroundingLinks] = useState<{url: string, title: string}[]>([]);
 
   useEffect(() => {
     if (!isAuthenticated && !userLocation) return;
@@ -41,6 +44,16 @@ export const Home: React.FC = () => {
                   });
                   const city = response.text?.trim().replace(/\.$/, '');
                   if (city) setCurrentCity(city);
+                  
+                  // Extract grounding links as mandated by the instructions for googleMaps tool
+                  const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+                  if (chunks) {
+                    const links = chunks.map((c: any) => ({
+                      url: c.maps?.uri || '',
+                      title: c.maps?.title || 'Google Maps Source'
+                    })).filter((l: any) => l.url);
+                    setGroundingLinks(links);
+                  }
               } catch (err) { console.error(err); }
           }
         },
@@ -89,8 +102,20 @@ export const Home: React.FC = () => {
                </div>
             )}
             {locationStatus === 'success' && currentCity && (
-               <div className="text-brand-100 text-xs font-bold flex items-center gap-2 bg-green-900/30 px-5 py-2 rounded-full border border-green-500/30 animate-fadeIn">
-                  <i className="fas fa-map-marker-alt text-green-400"></i> Catálogo online em <span className="text-white">{currentCity}</span>
+               <div className="flex flex-col items-center gap-2">
+                 <div className="text-brand-100 text-xs font-bold flex items-center gap-2 bg-green-900/30 px-5 py-2 rounded-full border border-green-500/30 animate-fadeIn">
+                    <i className="fas fa-map-marker-alt text-green-400"></i> Catálogo online em <span className="text-white">{currentCity}</span>
+                 </div>
+                 {/* Display mandatory grounding links for googleMaps */}
+                 {groundingLinks.length > 0 && (
+                   <div className="flex gap-4 mt-2">
+                     {groundingLinks.map((link, idx) => (
+                       <a key={idx} href={link.url} target="_blank" rel="noopener noreferrer" className="text-[9px] text-brand-200 hover:text-white underline font-bold transition">
+                         {link.title}
+                       </a>
+                     ))}
+                   </div>
+                 )}
                </div>
             )}
           </div>

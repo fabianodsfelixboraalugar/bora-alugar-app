@@ -49,16 +49,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     trustStats: p.trust_stats || { score: 50, level: 'NEUTRAL', completedTransactions: 0, cancellations: 0, avgRatingAsOwner: 5, countRatingAsOwner: 0, avgRatingAsRenter: 5, countRatingAsRenter: 0 }
   }), []);
 
-  const fetchUsers = async () => {
-    try {
-      const { data, error } = await supabase.from('profiles').select('*');
-      if (error) throw error;
-      if (data) setAllUsers(data.map(p => mapProfile(p)));
-    } catch (e) {
-      console.warn("Aviso: Falha ao sincronizar lista de perfis.");
-    }
-  };
-
   const fetchProfile = async (userId: string, authUser?: any) => {
     try {
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
@@ -72,6 +62,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      const { data } = await supabase.from('profiles').select('*');
+      if (data) setAllUsers(data.map(p => mapProfile(p)));
+    } catch (e) {
+      console.warn("Falha ao sincronizar lista de perfis.");
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
 
@@ -82,8 +81,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await fetchProfile(session.user.id, session.user);
           await fetchUsers();
         }
-      } catch (e) {
-        console.error("Erro na inicialização auth:", e);
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -94,11 +91,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
-      if (event === 'SIGNED_IN') {
-        if (session?.user) {
-          await fetchProfile(session.user.id, session.user);
-          await fetchUsers();
-        }
+      if (event === 'SIGNED_IN' && session?.user) {
+        await fetchProfile(session.user.id, session.user);
+        await fetchUsers();
         setIsLoading(false);
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
@@ -120,8 +115,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
       return { success: !!data.user };
     } catch (e: any) {
-      setIsLoading(false);
       return { success: false, message: e.message || "Erro ao entrar." };
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -141,7 +137,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       });
-
       if (authError) throw authError;
       return { success: true, needsConfirmation: !authData.session && !!authData.user };
     } catch (err: any) {
@@ -160,14 +155,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateUser = async (data: Partial<User>) => {
     if (!user) return;
-    const { error } = await supabase.from('profiles').update(data as any).eq('id', user.id);
-    if (error) throw error;
+    await supabase.from('profiles').update(data as any).eq('id', user.id);
     await fetchProfile(user.id);
   };
 
   const deleteUser = async (userId: string) => {
-    const { error } = await supabase.from('profiles').delete().eq('id', userId);
-    if (error) throw error;
+    await supabase.from('profiles').delete().eq('id', userId);
     await fetchUsers();
   };
 

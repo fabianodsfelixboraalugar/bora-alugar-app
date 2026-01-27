@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+// Changed import from react-router-dom to react-router
+import { useNavigate, useSearchParams } from 'react-router';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { Category, Item, VerificationStatus, UserPlan } from '../types';

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+// Changed import from react-router-dom to react-router
+import { useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { User, Item, Rental, UserPlan, VerificationStatus, UserRole, RentalStatus } from '../types';
@@ -442,7 +443,7 @@ export const AdminDashboard: React.FC = () => {
                                 <td className="px-6 py-6">
                                    <div className="flex flex-col gap-1.5">
                                       <span className={`text-[9px] font-black uppercase px-3 py-1 rounded-lg w-fit ${u.verified ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}>{u.verified ? 'Verificado' : 'Pendente'}</span>
-                                      <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full w-fit ${u.isActive === false ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>{u.isActive === false ? 'Inativo' : 'Ativo'}</span>
+                                      <span className={`text-[8px] font-black uppercase px-2.5 py-0.5 rounded-full w-fit ${u.isActive === false ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>{u.isActive === false ? 'Inativo' : 'Ativo'}</span>
                                    </div>
                                 </td>
                                 <td className="px-6 py-6">
@@ -555,101 +556,4 @@ export const AdminDashboard: React.FC = () => {
                          <div className="flex items-center gap-4">
                             <img src={item.images[0]} className="w-16 h-16 rounded-2xl object-cover shadow-sm" alt="" />
                             <div>
-                               <p className="font-bold text-gray-900 mb-1 leading-tight">{item.title}</p>
-                               <p className="text-[10px] text-brand-600 font-black">R$ {item.pricePerDay} / dia</p>
-                               <p className="text-[9px] text-gray-400 uppercase font-bold">{item.city}</p>
-                            </div>
-                         </div>
-                         <div className="flex gap-2">
-                            <button onClick={() => navigate(`/item/${item.id}`)} className="w-10 h-10 rounded-xl bg-gray-50 text-gray-400 hover:text-brand-600 transition flex items-center justify-center"><i className="fas fa-external-link-alt text-xs"></i></button>
-                            <button onClick={() => { if(window.confirm("Remover anúncio permanentemente?")) removeItem(item.id) }} className="w-10 h-10 rounded-xl bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition flex items-center justify-center"><i className="fas fa-times text-xs"></i></button>
-                         </div>
-                      </div>
-                   ))}
-                </div>
-             </div>
-           )}
-
-           {/* --- TAB ALUGUÉIS (RENTALS) --- */}
-           {activeTab === 'rentals' && (
-             <div className="space-y-6 animate-fadeIn">
-                <div className="mb-4">
-                    <h3 className="text-xl font-black text-gray-900 uppercase tracking-tighter">Fluxo Global de Aluguéis</h3>
-                    <p className="text-sm text-gray-400 font-medium">Monitoramento de transações em tempo real na rede Bora Alugar.</p>
-                </div>
-                <div className="grid gap-4">
-                    {rentals.length === 0 ? (
-                        <div className="text-center py-20 text-gray-300 font-black uppercase tracking-widest">Aguardando as primeiras locações</div>
-                    ) : (
-                        rentals.map(r => (
-                        <div key={r.id} className="p-6 bg-white border border-gray-100 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm hover:shadow-md transition">
-                            <div className="flex items-center gap-4 flex-1">
-                                <img src={r.itemImage} className="w-16 h-16 rounded-2xl object-cover shadow-sm" alt="" />
-                                <div>
-                                    <p className="font-bold text-gray-900 leading-none mb-2">{r.itemTitle}</p>
-                                    <div className="flex items-center gap-2">
-                                        <span className={`text-[9px] font-black uppercase px-3 py-1 rounded-lg ${
-                                            r.status === RentalStatus.CANCELLED ? 'bg-red-50 text-red-600' :
-                                            r.status === RentalStatus.COMPLETED ? 'bg-gray-100 text-gray-600' : 'bg-brand-50 text-brand-700'
-                                        }`}>{r.status}</span>
-                                        <p className="text-[10px] text-gray-400 font-bold uppercase">R$ {r.totalPrice}</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="text-right flex-shrink-0 flex flex-col items-end">
-                                <span className="text-[9px] font-black uppercase text-gray-300 tracking-widest mb-1">Solicitado em</span>
-                                <span className="text-xs font-bold text-gray-700 bg-gray-50 px-4 py-1.5 rounded-full border border-gray-100">{new Date(r.createdAt).toLocaleDateString()}</span>
-                            </div>
-                        </div>
-                        ))
-                    )}
-                </div>
-             </div>
-           )}
-
-           {/* --- TAB LOGS AUDITORIA --- */}
-           {activeTab === 'logs' && (
-              <div className="space-y-6 animate-fadeIn">
-                 <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xl font-black text-gray-900 uppercase tracking-tighter">Logs de Auditoria Global</h3>
-                    <button onClick={handleClearAuditLogs} className="px-5 py-2.5 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase hover:bg-red-500 hover:text-white transition shadow-sm">Limpar Histórico</button>
-                 </div>
-                 
-                 <div className="overflow-x-auto bg-white rounded-[2rem] border border-gray-100 shadow-sm">
-                    <table className="w-full text-left">
-                        <thead>
-                            <tr className="bg-gray-50 text-[10px] font-black uppercase text-gray-400 tracking-widest">
-                                <th className="px-6 py-4">Data / Hora</th>
-                                <th className="px-6 py-4">Ação</th>
-                                <th className="px-6 py-4">Detalhes / Usuário</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-50">
-                            {logs.length === 0 ? (
-                                <tr><td colSpan={3} className="p-20 text-center text-gray-300 uppercase font-black tracking-widest text-xs">Sem logs registrados ainda.</td></tr>
-                            ) : (
-                                logs.map(log => (
-                                    <tr key={log.id} className="text-xs hover:bg-gray-50 transition">
-                                        <td className="px-6 py-5 whitespace-nowrap font-mono text-gray-500">{new Date(log.timestamp).toLocaleString()}</td>
-                                        <td className="px-6 py-5 whitespace-nowrap">
-                                            <span className={`px-2 py-1 rounded font-black text-[9px] uppercase ${
-                                                log.action.includes('FALHA') || log.action.includes('EXCLUSÃO') ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
-                                            }`}>{log.action}</span>
-                                        </td>
-                                        <td className="px-6 py-5">
-                                            <p className="text-gray-800 font-medium mb-0.5">{log.details}</p>
-                                            {log.userEmail && <p className="text-[9px] text-gray-400 font-bold">Resp: {log.userEmail}</p>}
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                 </div>
-              </div>
-           )}
-        </div>
-      </div>
-    </div>
-  );
-};
+                               <p className="

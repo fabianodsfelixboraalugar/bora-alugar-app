@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+// Changed import from react-router-dom to react-router to support consolidated exports
+import { Link, useNavigate } from 'react-router';
 import { Item, VerificationStatus } from '../types';
 import { useAuth } from '../context/AuthContext';
 

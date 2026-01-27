@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+// Changed import from react-router-dom to react-router
+import { useSearchParams, useNavigate } from 'react-router';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { jsPDF } from 'jspdf';
