@@ -1,7 +1,5 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-// Changed import from react-router-dom to react-router to support consolidated exports in newer versions
-import { Link, useNavigate, useLocation } from 'react-router';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { Logo } from './Logo';
@@ -39,10 +37,7 @@ export const Navbar: React.FC = () => {
   const myNotifications = user ? notifications.filter(n => n.userId === user.id) : [];
   const unreadNotifCount = myNotifications.filter(n => !n.read).length;
   
-  // Moderação pendente para Admin
   const pendingKycCount = user?.role === 'ADMIN' ? getPendingUsers().length : 0;
-
-  // Definição de Autoridade Administrativa (Admin ou Colaborador Ativo)
   const hasAdminAccess = user && user.isActive !== false && (user.role === 'ADMIN' || !!user.jobTitle || user.id.startsWith('colab_'));
 
   const getNotifIcon = (type: NotificationType) => {
@@ -81,7 +76,6 @@ export const Navbar: React.FC = () => {
                   Anunciar Item
                 </Link>
 
-                {/* Sino de Notificações */}
                 <div className="relative" ref={notifRef}>
                   <button 
                     onClick={() => setIsNotifOpen(!isNotifOpen)}

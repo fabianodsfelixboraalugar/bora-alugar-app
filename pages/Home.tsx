@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleGenAI } from "@google/genai";
@@ -17,6 +16,7 @@ export const Home: React.FC = () => {
   const [locationStatus, setLocationStatus] = useState<'prompt' | 'loading' | 'success' | 'denied' | 'error'>('prompt');
   const [currentCity, setCurrentCity] = useState<string>('');
   const [searchRadius, setSearchRadius] = useState<number>(50);
+  const [groundingLinks, setGroundingLinks] = useState<{url: string, title: string}[]>([]);
 
   useEffect(() => {
     if (!isAuthenticated && !userLocation) return;
@@ -36,11 +36,24 @@ export const Home: React.FC = () => {
                   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
                   const response = await ai.models.generateContent({
                       model: "gemini-3-flash-preview",
-                      contents: "Retorne APENAS o nome da cidade desta localização geográfica (lat: " + latitude + ", lng: " + longitude + ").",
-                      config: { thinkingConfig: { thinkingBudget: 0 } },
+                      contents: `Identifique o nome da cidade desta localização geográfica (lat: ${latitude}, lng: ${longitude}). Retorne APENAS o nome da cidade.`,
+                      config: { 
+                        tools: [{ googleMaps: {} }],
+                        toolConfig: { retrievalConfig: { latLng: { latitude, longitude } } }
+                      },
                   });
                   const city = response.text?.trim().replace(/\.$/, '');
                   if (city) setCurrentCity(city);
+
+                  // Extrair links de grounding obrigatórios conforme as diretrizes
+                  const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+                  if (chunks) {
+                    const links = chunks.map((c: any) => ({
+                      url: c.maps?.uri || '',
+                      title: c.maps?.title || 'Ver no Google Maps'
+                    })).filter((l: any) => l.url);
+                    setGroundingLinks(links);
+                  }
               } catch (err) { console.error(err); }
           }
         },
@@ -78,7 +91,6 @@ export const Home: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50/50">
-      {/* Hero Section */}
       <section className="relative bg-[#1a2e21] pt-20 pb-24 lg:pt-32 lg:pb-40 overflow-hidden">
         <div className="absolute inset-0 opacity-10 bg-[url('https://images.unsplash.com/photo-1556761175-5973dc0f32e7?auto=format&fit=crop&w=1950&q=80')] bg-cover bg-center"></div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -99,15 +111,25 @@ export const Home: React.FC = () => {
           </form>
 
           {locationStatus === 'success' && currentCity && (
-             <div className="inline-flex items-center gap-3 bg-white/10 px-6 py-2.5 rounded-full border border-white/20 animate-fadeIn backdrop-blur-md">
-                <i className="fas fa-map-marker-alt text-brand-500"></i> 
-                <span className="text-sm font-bold text-white uppercase tracking-widest">Catálogo em {currentCity}</span>
+             <div className="flex flex-col items-center gap-2">
+                <div className="inline-flex items-center gap-3 bg-white/10 px-6 py-2.5 rounded-full border border-white/20 animate-fadeIn backdrop-blur-md">
+                   <i className="fas fa-map-marker-alt text-brand-500"></i> 
+                   <span className="text-sm font-bold text-white uppercase tracking-widest">Catálogo em {currentCity}</span>
+                </div>
+                {groundingLinks.length > 0 && (
+                  <div className="flex gap-4">
+                    {groundingLinks.map((link, idx) => (
+                      <a key={idx} href={link.url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-brand-200 hover:text-white underline font-bold transition">
+                        {link.title}
+                      </a>
+                    ))}
+                  </div>
+                )}
              </div>
           )}
         </div>
       </section>
 
-      {/* Categorias Grid */}
       <section className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <h2 className="text-xl font-black text-gray-900 mb-10 flex items-center gap-3 uppercase tracking-widest"><span className="w-12 h-1.5 bg-brand-500 rounded-full"></span>Categorias</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-9 gap-4">
@@ -126,7 +148,6 @@ export const Home: React.FC = () => {
         </div>
       </section>
 
-      {/* Destaques */}
       <section className="py-20 bg-white rounded-t-[5rem] shadow-[0_-20px_50px_rgba(0,0,0,0.02)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-12">
