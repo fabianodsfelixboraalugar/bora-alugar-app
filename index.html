@@ -6,14 +6,13 @@
     <meta name="theme-color" content="#84cc16" />
     <meta name="description" content="Bora Alugar - A plataforma completa para alugar qualquer coisa." />
     
+    <!-- PWA: O manifest deve ser referenciado com caminho absoluto para a raiz -->
+    <link rel="manifest" href="/manifest.json" />
+    
     <!-- iOS support -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Bora Alugar">
-    
-    <!-- O manifest deve ser servido da raiz (/public em dev vira / em prod) -->
-    <!-- Referência absoluta para evitar que o Vite processe o arquivo como asset -->
-    <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1042/1042390.png">
     
     <title>Bora Alugar - Alugue o que precisar</title>
@@ -39,7 +38,7 @@
 </head>
   <body class="bg-gray-50 text-slate-800 antialiased">
     <div id="root"></div>
-    <!-- Ponto de entrada para o build local do Vite -->
+    <!-- No Vite, o script aponta diretamente para o arquivo TSX, o Vite faz a transpilação -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>

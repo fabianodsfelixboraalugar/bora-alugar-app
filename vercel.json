@@ -5,22 +5,14 @@
       "src": "/manifest.json",
       "headers": {
         "Content-Type": "application/manifest+json",
-        "Cache-Control": "public, max-age=0, must-revalidate"
+        "Access-Control-Allow-Origin": "*"
       },
       "continue": true
     },
     {
       "src": "/sw.js",
       "headers": {
-        "Service-Worker-Allowed": "/",
-        "Cache-Control": "public, max-age=0, must-revalidate"
-      },
-      "continue": true
-    },
-    {
-      "src": "/assets/(.*)",
-      "headers": {
-        "Cache-Control": "public, max-age=31536000, immutable"
+        "Service-Worker-Allowed": "/"
       },
       "continue": true
     },
