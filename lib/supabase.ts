@@ -1,13 +1,13 @@
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
+import { createClient } from '@supabase/supabase-js';
 
-// Using process.env instead of import.meta.env to fix "Property 'env' does not exist on type 'ImportMeta'" errors
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-// Using process.env instead of import.meta.env to fix "Property 'env' does not exist on type 'ImportMeta'" errors
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+// Em aplicações Vite, as variáveis de ambiente são acessadas via import.meta.env
+// Usamos o cast 'as any' para evitar erros de tipagem caso o ambiente TS não esteja configurado com as definições do Vite
+const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("ERRO CRÍTICO: Variáveis do Supabase não configuradas no arquivo .env ou no Vercel.");
+  console.warn("AVISO: Variáveis do Supabase não encontradas em import.meta.env. Verifique o arquivo .env.");
 }
 
 export const supabase = createClient(

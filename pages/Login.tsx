@@ -16,7 +16,7 @@ export const Login: React.FC = () => {
   const [recoveryEmail, setRecoveryEmail] = useState('');
   const [recoveryStatus, setRecoveryStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   
-  const { login, getAllUsers } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   // Email Suggestions State
@@ -88,23 +88,6 @@ export const Login: React.FC = () => {
     }
   };
 
-  const handleRecoverPassword = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    setRecoveryStatus('loading');
-    
-    // Simulação de busca no banco de dados
-    const allUsers = getAllUsers();
-    const userExists = allUsers.find(u => u.email === (recoveryEmail || email));
-
-    setTimeout(() => {
-      if (userExists) {
-        setRecoveryStatus('success');
-      } else {
-        setRecoveryStatus('error');
-      }
-    }, 1500);
-  };
-
   const openRecovery = () => {
     setRecoveryEmail(email);
     setRecoveryStatus('idle');
@@ -132,7 +115,7 @@ export const Login: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2">E-mail Enviado!</h3>
-                  <p className="text-sm text-gray-500 font-medium">Instruções de recuperação foram enviadas para <span className="text-brand-600 font-bold">{recoveryEmail || email}</span>. Verifique sua caixa de entrada e spam.</p>
+                  <p className="text-sm text-gray-500 font-medium">Instruções de recuperação foram enviadas para <span className="text-brand-600 font-bold">{recoveryEmail || email}</span>.</p>
                 </div>
                 <button 
                   onClick={() => setShowRecoveryModal(false)}
@@ -148,44 +131,27 @@ export const Login: React.FC = () => {
                     <i className="fas fa-key text-brand-600 text-2xl"></i>
                   </div>
                   <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Recuperar Senha</h3>
-                  <p className="text-xs text-gray-500 font-medium mt-1">Informe seu e-mail cadastrado para receber um link de redefinição.</p>
                 </div>
 
-                <form onSubmit={handleRecoverPassword} className="space-y-4">
+                <form className="space-y-4">
                   <div>
                     <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1.5 ml-1">Seu E-mail</label>
                     <input 
                       type="email" 
                       required
-                      className={`w-full px-4 py-3 rounded-xl border ${recoveryStatus === 'error' ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white'} focus:ring-2 focus:ring-brand-500 outline-none transition shadow-sm text-sm`}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-white focus:ring-2 focus:ring-brand-500 outline-none transition shadow-sm text-sm"
                       value={recoveryEmail}
                       onChange={e => { setRecoveryEmail(e.target.value); setRecoveryStatus('idle'); }}
                       placeholder="seu@email.com"
                     />
-                    {recoveryStatus === 'error' && (
-                      <p className="text-[10px] text-red-600 font-bold mt-2 ml-1 uppercase"><i className="fas fa-times-circle mr-1"></i> E-mail não encontrado em nossa base.</p>
-                    )}
                   </div>
 
                   <button 
-                    type="submit"
-                    disabled={recoveryStatus === 'loading'}
-                    className="w-full bg-brand-500 hover:bg-brand-600 text-white font-black py-4 rounded-2xl shadow-lg transition transform active:scale-95 uppercase text-xs tracking-widest flex items-center justify-center gap-2"
-                  >
-                    {recoveryStatus === 'loading' ? (
-                      <>
-                        <i className="fas fa-circle-notch fa-spin"></i> Processando...
-                      </>
-                    ) : (
-                      'Enviar Link de Recuperação'
-                    )}
-                  </button>
-                  <button 
                     type="button"
-                    onClick={() => setShowRecoveryModal(false)}
-                    className="w-full bg-white text-gray-400 font-bold py-3 text-xs uppercase tracking-widest hover:text-gray-600 transition"
+                    className="w-full bg-brand-500 hover:bg-brand-600 text-white font-black py-4 rounded-2xl shadow-lg transition transform active:scale-95 uppercase text-xs tracking-widest flex items-center justify-center gap-2"
+                    onClick={() => setRecoveryStatus('success')}
                   >
-                    Cancelar
+                    Enviar Link de Recuperação
                   </button>
                 </form>
               </div>
@@ -194,11 +160,12 @@ export const Login: React.FC = () => {
         </div>
       )}
 
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 border border-gray-100 animate-fadeIn relative">
+      <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 border border-gray-100 animate-fadeIn relative overflow-hidden">
         <div className="text-center mb-8 mt-6">
           <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight">Entrar</h2>
           <p className="text-gray-500 mt-2 font-medium">Acesse sua conta para alugar e anunciar</p>
         </div>
+        
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="relative" ref={emailInputRef}>
             <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1">Email</label>
@@ -241,7 +208,6 @@ export const Login: React.FC = () => {
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-brand-500 transition-colors"
-                aria-label={showPassword ? "Ocultar senha" : "Visualizar senha"}
               >
                 <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
               </button>
@@ -252,7 +218,6 @@ export const Login: React.FC = () => {
             <div className="flex items-center">
               <input
                 id="remember-me"
-                name="remember-me"
                 type="checkbox"
                 className="h-4 w-4 text-brand-600 focus:ring-brand-500 border-gray-300 rounded cursor-pointer"
                 checked={rememberMe}
@@ -285,17 +250,10 @@ export const Login: React.FC = () => {
           </div>
 
           {loginError && (
-            <div className="bg-red-50 border border-red-100 p-4 rounded-2xl animate-fadeIn space-y-2">
-              <p className="text-red-600 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
-                <i className="fas fa-exclamation-circle text-xs"></i> Credenciais Incorretas
+            <div className="bg-red-50 border border-red-100 p-3 rounded-xl animate-fadeIn">
+              <p className="text-red-600 text-[10px] font-black uppercase tracking-tight text-center">
+                <i className="fas fa-exclamation-triangle mr-1"></i> Credenciais Incorretas
               </p>
-              <button 
-                type="button" 
-                onClick={openRecovery}
-                className="w-full py-2 bg-white border border-red-200 rounded-xl text-red-600 text-[9px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition shadow-sm"
-              >
-                Recuperar Senha
-              </button>
             </div>
           )}
 
