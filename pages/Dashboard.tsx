@@ -108,16 +108,11 @@ export const Dashboard: React.FC = () => {
         <div className="w-full md:w-1/4 space-y-6">
           <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 text-center relative overflow-hidden">
             <div className="w-24 h-24 rounded-full mx-auto border-4 border-white shadow-lg overflow-hidden bg-gray-50 mb-4">
-              <img src={user.avatar || "https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png"} alt="Perfil" className="w-full h-full object-cover" />
+              <img src={user.avatar || "https://i.pravatar.cc/150"} alt="P" className="w-full h-full object-cover" />
             </div>
-            <h2 className="text-xl font-black text-gray-900 mb-4 leading-tight">{user.name}</h2>
+            <h2 className="text-xl font-black text-gray-900 mb-1 leading-tight">{user.name}</h2>
+            <p className="text-xs text-gray-500 font-bold mb-3">{user.bio || 'Locatário Bora Alugar'}</p>
             
-            {/* CIDADE E ESTADO */}
-            <div className="flex items-center justify-center gap-1.5 mb-4 text-gray-400">
-               <i className="fas fa-map-marker-alt text-[10px] text-brand-500"></i>
-               <span className="text-[10px] font-black uppercase tracking-widest">{user.city}, {user.state || 'BR'}</span>
-            </div>
-
             <div className="flex justify-center mb-4">
               <TrustBadge stats={user.trustStats} showScore={true} />
             </div>

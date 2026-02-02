@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
@@ -6,38 +7,59 @@
     <meta name="theme-color" content="#84cc16" />
     <meta name="description" content="Bora Alugar - A plataforma completa para alugar qualquer coisa." />
     
-    <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
-    
-    <!-- iOS support -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Bora Alugar">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1042/1042390.png">
     
     <title>Bora Alugar - Alugue o que precisar</title>
-    
-    <!-- Font Awesome -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet" />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                50: '#f7fee7',
+                100: '#ecfccb',
+                500: '#84cc16',
+                600: '#65a30d',
+                700: '#4d7c0f',
+                900: '#365314',
+              },
+              secondary: {
+                500: '#f97316',
+                600: '#ea580c',
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      :root { --sat: env(safe-area-inset-top); --sab: env(safe-area-inset-bottom); }
+      body { background-color: #f9fafb; font-family: -apple-system, system-ui, sans-serif; }
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+      .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
+    </style>
   <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@^19.2.4",
     "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
     "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
     "react-router-dom": "https://esm.sh/react-router-dom@^7.13.0",
-    "@google/genai": "https://esm.sh/@google/genai@^1.38.0",
-    "jspdf": "https://esm.sh/jspdf@^4.0.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.39.0",
+    "jspdf": "https://esm.sh/jspdf@^4.1.0",
     "vite": "https://esm.sh/vite@^7.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.93.1"
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.3",
+    "idb-keyval": "https://esm.sh/idb-keyval@^6.2.2"
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
   <body class="bg-gray-50 text-slate-800 antialiased">
     <div id="root"></div>
-    <!-- O Vite transformará este index.tsx no bundle final durante o build -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>

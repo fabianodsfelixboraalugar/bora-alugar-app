@@ -219,7 +219,7 @@ export const ItemDetails: React.FC = () => {
                     </button>
                 ))}
                 
-                {/* Thumbnail do Vídeo na Galeria - MANTIDO conforme solicitado */}
+                {/* Thumbnail do Vídeo na Galeria */}
                 {videoData && (
                     <button 
                         onClick={() => setActiveMedia(item.images.length)}
@@ -246,6 +246,27 @@ export const ItemDetails: React.FC = () => {
             </h2>
             <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{item.description}</p>
           </div>
+
+          {/* Seção de Vídeo (Opcional - Mantida para complementar) */}
+          {videoData && (
+             <div className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4 animate-fadeIn">
+                <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                    <i className="fas fa-video text-brand-500"></i> Demonstração em Vídeo
+                </h3>
+                <div className="rounded-3xl overflow-hidden aspect-video bg-black shadow-lg">
+                    <iframe
+                        className="w-full h-full"
+                        src={videoData.type === 'youtube' 
+                            ? `https://www.youtube.com/embed/${videoData.id}` 
+                            : `https://player.vimeo.com/video/${videoData.id}`}
+                        title="Item Video Full"
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                    ></iframe>
+                </div>
+             </div>
+          )}
 
           <div id="reviews-section" className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-8 animate-fadeIn">
             <div className="flex items-center justify-between">
@@ -314,6 +335,31 @@ export const ItemDetails: React.FC = () => {
         <div className="lg:col-span-5 space-y-6">
           <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-xl sticky top-24">
             
+            {/* --- MINIATURA DO VÍDEO NO TOPO DO CARD DE SOLICITAÇÃO (CONFORME SCREENSHOT) --- */}
+            {videoData && (
+               <div className="mb-6 group cursor-pointer animate-fadeIn" onClick={() => setActiveMedia(item.images.length)}>
+                  <div className="relative rounded-2xl overflow-hidden aspect-video bg-gray-100 border border-gray-100 shadow-sm ring-2 ring-brand-500/20 group-hover:ring-brand-500 transition-all duration-300">
+                      <img 
+                          src={videoData.type === 'youtube' 
+                              ? `https://img.youtube.com/vi/${videoData.id}/mqdefault.jpg` 
+                              : "https://vignette.wikia.nocookie.net/video-game-ad-database/images/e/e5/Vimeo_Logo.png"} 
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" 
+                          alt="Miniatura do Vídeo" 
+                      />
+                      {/* Overlay do Botão de Play */}
+                      <div className="absolute inset-0 bg-black/30 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                          <div className="w-14 h-14 bg-white/90 rounded-full flex items-center justify-center shadow-2xl group-hover:scale-110 group-active:scale-95 transition-transform duration-300">
+                              <i className="fas fa-play text-brand-500 text-xl ml-1"></i>
+                          </div>
+                      </div>
+                      {/* Badge Indicadora */}
+                      <div className="absolute top-3 left-3">
+                        <span className="bg-brand-500 text-white text-[8px] font-black uppercase px-2 py-1 rounded-lg shadow-sm border border-brand-400">DEMONSTRAÇÃO EM VÍDEO</span>
+                      </div>
+                  </div>
+               </div>
+            )}
+
             <div className="flex justify-between items-start mb-4">
                <div className="flex-1 min-w-0">
                   <h1 className="text-2xl font-black text-gray-900 leading-tight mb-1 truncate">{item.title}</h1>

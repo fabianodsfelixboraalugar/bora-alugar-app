@@ -1,22 +1,16 @@
-import { createClient } from '@supabase/supabase-js';
 
-// No Vite, as variáveis devem começar com VITE_
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 
-// Fallbacks para evitar o erro "supabaseUrl is required" que causa a tela branca
-const placeholderUrl = 'https://placeholder-project.supabase.co';
-const placeholderKey = 'placeholder-key';
+// Using process.env instead of import.meta.env to fix "Property 'env' does not exist on type 'ImportMeta'" errors
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+// Using process.env instead of import.meta.env to fix "Property 'env' does not exist on type 'ImportMeta'" errors
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
-    "⚠️ ATENÇÃO: Variáveis de ambiente Supabase não configuradas no Vercel.\n" +
-    "O App abrirá, mas as funcionalidades de banco de dados estarão inativas.\n" +
-    "Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY nas configurações do projeto."
-  );
+  console.error("ERRO CRÍTICO: Variáveis do Supabase não configuradas no arquivo .env ou no Vercel.");
 }
 
 export const supabase = createClient(
-  supabaseUrl || placeholderUrl,
-  supabaseAnonKey || placeholderKey
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder'
 );
