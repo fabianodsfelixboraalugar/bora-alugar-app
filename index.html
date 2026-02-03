@@ -42,7 +42,7 @@
       .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
     </style>
     <script>
-      // Garante a existência de process.env no contexto global do navegador
+      // Garante a existência de process.env no contexto global do navegador para compatibilidade com bibliotecas legadas
       window.process = { env: {} };
     </script>
   <script type="importmap">
@@ -61,7 +61,6 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
   <body class="bg-gray-50 text-slate-800 antialiased">
     <div id="root"></div>
