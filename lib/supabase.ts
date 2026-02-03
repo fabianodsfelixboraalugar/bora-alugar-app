@@ -1,16 +1,18 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-// Em aplicações Vite, as variáveis de ambiente são acessadas via import.meta.env
-// Usamos o cast 'as any' para evitar erros de tipagem caso o ambiente TS não esteja configurado com as definições do Vite
-const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
-const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+// Alterado para process.env para evitar erros de tipagem no ImportMeta e manter consistência com o uso de process.env.API_KEY no projeto
+const supabaseUrl = (process.env as any).VITE_SUPABASE_URL;
+const supabaseAnonKey = (process.env as any).VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn("AVISO: Variáveis do Supabase não encontradas em import.meta.env. Verifique o arquivo .env.");
+  console.error(
+    "ERRO DE CONFIGURAÇÃO: Variáveis VITE_SUPABASE_URL ou VITE_SUPABASE_ANON_KEY ausentes no ambiente."
+  );
 }
 
+// Client exportado com verificação de segurança
 export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder'
+  supabaseUrl || 'https://placeholder-url.supabase.co',
+  supabaseAnonKey || 'placeholder-key'
 );
