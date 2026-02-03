@@ -41,6 +41,10 @@
       @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
       .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
     </style>
+    <script>
+      // Garante a existência de process.env no contexto global do navegador
+      window.process = { env: {} };
+    </script>
   <script type="importmap">
 {
   "imports": {
