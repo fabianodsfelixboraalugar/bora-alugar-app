@@ -9,22 +9,14 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: false,
     minify: 'esbuild',
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          supabase: ['@supabase/supabase-js'],
-          genai: ['@google/genai']
-        }
-      }
-    }
-  },
-  server: {
-    host: true,
-    port: 3000
   },
   define: {
-    // Garante compatibilidade de variáveis de ambiente process.env legadas se necessário
-    'process.env': {}
+    // Injeta as variáveis de ambiente durante o build do Vercel
+    'process.env.API_KEY': JSON.stringify(process.env.API_KEY || ''),
+    'process.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL || ''),
+    'process.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY || ''),
+    'process.env': {
+      API_KEY: process.env.API_KEY || ''
+    }
   }
 })
