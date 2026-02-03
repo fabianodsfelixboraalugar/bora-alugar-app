@@ -2,7 +2,7 @@
 {
   "name": "bora-alugar-app",
   "private": true,
-  "version": "1.1.1",
+  "version": "1.1.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/genai": "^0.21.0",
+    "@google/genai": "^0.22.0",
     "@supabase/supabase-js": "^2.48.1",
     "idb-keyval": "^6.2.1",
     "react": "^18.2.0",
