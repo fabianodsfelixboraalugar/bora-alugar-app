@@ -3,26 +3,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
-import { Category, Item, VerificationStatus, UserPlan } from '../types';
+import { Category, Item, VerificationStatus } from '../types';
 import { BackButton } from '../components/BackButton';
 import { VerificationModal } from '../components/VerificationModal';
-import { UpgradeModal } from '../components/UpgradeModal';
 
 export const AddItem: React.FC = () => {
-  const { addItem, updateItem, getItemById, items } = useData();
+  const { addItem, updateItem, getItemById } = useData();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [showKYC, setShowKYC] = useState(false);
-  const [showUpgrade, setShowUpgrade] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const editId = searchParams.get('edit');
-
-  // Cálculo de limite do plano
-  const userItemsCount = items.filter(i => i.ownerId === user?.id).length;
-  const planLimit = user?.plan === UserPlan.FREE ? 1 : user?.plan === UserPlan.BASIC ? 5 : 999;
-  const limitReached = !editId && userItemsCount >= planLimit;
 
   const defaultContract = `1. O locatário compromete-se a devolver o item no mesmo estado em que o recebeu.\n2. Em caso de danos, o locatário arcará com os custos de reparo ou reposição.\n3. O atraso na devolução acarretará em multa diária equivalente ao valor da diária.\n4. O uso deve ser estritamente para os fins destinados.`;
 
@@ -95,12 +88,6 @@ export const AddItem: React.FC = () => {
     e.preventDefault();
     if (!user) return;
 
-    // VERIFICAÇÃO DE LIMITE DE PLANO
-    if (limitReached) {
-        setShowUpgrade(true);
-        return;
-    }
-
     const missingFields = [];
     if (!formData.title.trim()) missingFields.push("Título do Anúncio");
     if (!formData.pricePerDay.trim() || Number(formData.pricePerDay) <= 0) missingFields.push("Preço da Diária");
@@ -159,7 +146,6 @@ export const AddItem: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 min-h-screen bg-gray-50/30">
       {showKYC && <VerificationModal onClose={() => setShowKYC(false)} />}
-      {showUpgrade && <UpgradeModal currentPlan={user?.plan || UserPlan.FREE} itemCount={userItemsCount} onClose={() => setShowUpgrade(false)} />}
       
       <div className="mb-10 relative flex items-center min-h-[56px]">
         <div className="z-10">
@@ -172,27 +158,7 @@ export const AddItem: React.FC = () => {
         </div>
       </div>
 
-      {limitReached && (
-        <div className="mb-8 p-6 bg-brand-50 border-2 border-brand-200 rounded-[2rem] flex flex-col md:flex-row items-center justify-between gap-6 animate-fadeIn">
-            <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-brand-600 shadow-sm border border-brand-100">
-                    <i className="fas fa-lock text-xl"></i>
-                </div>
-                <div>
-                    <h3 className="font-black text-gray-900 uppercase tracking-tight leading-none mb-1">Limite atingido</h3>
-                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Sua conta {user?.plan} permite apenas {planLimit} anúncio ativo.</p>
-                </div>
-            </div>
-            <button 
-                onClick={() => setShowUpgrade(true)}
-                className="bg-brand-500 text-white px-8 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl transition transform active:scale-95 whitespace-nowrap"
-            >
-                Fazer Upgrade Agora
-            </button>
-        </div>
-      )}
-
-      <div className={`bg-white rounded-[3rem] shadow-sm border border-gray-100 p-8 md:p-12 overflow-hidden transition-opacity ${limitReached ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+      <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 p-8 md:p-12 overflow-hidden">
         <form onSubmit={handleSubmit} className="space-y-12">
           {/* Seção de Mídia */}
           <div className="space-y-6">
@@ -271,6 +237,7 @@ export const AddItem: React.FC = () => {
             </div>
           </div>
 
+          {/* Campo de Contrato - CONFORME SOLICITADO */}
           <div className="pt-10 border-t border-gray-100">
              <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Termos do Contrato de Aluguel</label>
              <p className="text-[10px] text-gray-400 font-bold mb-4 ml-1">Estes termos serão apresentados ao locatário para aceite obrigatório antes do aluguel.</p>

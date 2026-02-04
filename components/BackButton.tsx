@@ -17,23 +17,16 @@ export const BackButton: React.FC<BackButtonProps> = ({
 }) => {
   const navigate = useNavigate();
 
-  const handleBack = (e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleBack = () => {
     if (hasUnsavedChanges && confirmMessage) {
       if (!window.confirm(confirmMessage)) return;
     }
-    
-    // Verifica se há histórico para voltar, caso contrário redireciona para a home
-    if (window.history.length > 1) {
-      navigate(-1);
-    } else {
-      navigate('/');
-    }
+    // Usar o router navigation para melhor experiência em SPAs
+    navigate(-1);
   };
 
   return (
     <button 
-      type="button"
       onClick={handleBack}
       className={`flex items-center gap-2 text-gray-600 hover:text-brand-600 transition-all font-bold py-2.5 px-4 rounded-xl bg-white border border-gray-100 shadow-sm hover:border-brand-200 hover:bg-gray-50 active:scale-95 group ${className}`}
       aria-label="Voltar para a página anterior"

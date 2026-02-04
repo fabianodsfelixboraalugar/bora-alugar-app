@@ -21,15 +21,8 @@ export const UserProfile: React.FC = () => {
 
   if (!profileUser) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-8 min-h-screen flex flex-col items-center justify-center text-center">
-        <div className="mb-8">
-           <BackButton label="Voltar para o Início" />
-        </div>
-        <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4 text-gray-400">
-           <i className="fas fa-user-slash text-3xl"></i>
-        </div>
-        <h2 className="text-xl font-bold text-gray-900 mb-2">Usuário não encontrado</h2>
-        <p className="text-gray-500">Este perfil pode ter sido excluído ou o link está incorreto.</p>
+      <div className="p-8 text-center font-bold">
+        Usuário não encontrado ou já excluído.
       </div>
     );
   }

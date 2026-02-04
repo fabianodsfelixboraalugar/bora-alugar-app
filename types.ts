@@ -12,9 +12,9 @@ export enum Category {
 }
 
 export enum UserPlan {
-  FREE = 'Gratuito',
-  BASIC = 'Individual (PF)',
-  PREMIUM = 'Empresarial (PJ)'
+  FREE = 'FREE',
+  BASIC = 'BASIC',
+  PREMIUM = 'PREMIUM'
 }
 
 export enum VerificationStatus {
@@ -77,8 +77,6 @@ export interface User {
   shareAddress?: boolean; 
   blockedUserIds?: string[];
   plan: UserPlan;
-  planExpiration?: string;
-  planAutoRenew?: boolean;
   isActive?: boolean;
 }
 
@@ -109,7 +107,7 @@ export interface Item {
   rating: number;
   reviewCount: number;
   available: boolean;
-  status?: ItemStatus;
+  status?: ItemStatus; // Campo opcional para suporte PJ
   lat?: number;
   lng?: number;
   distance?: number;
@@ -202,14 +200,4 @@ export interface Message {
 export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
-}
-
-export interface AppLog {
-  id: string;
-  timestamp: string;
-  action: string;
-  userId?: string;
-  userEmail?: string;
-  ip: string;
-  details: string;
 }

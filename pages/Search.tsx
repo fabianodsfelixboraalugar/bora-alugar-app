@@ -46,16 +46,15 @@ export const Search: React.FC = () => {
 
   const resolveCityWithMaps = async () => {
     if (!process.env.API_KEY) {
-        alert("API Key não configurada para busca georreferenciada.");
+        alert("API Key não configurada.");
         return;
     }
     
     setIsResolvingCity(true);
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        let prompt = `Identifique a cidade exata descrita por: "${cityFilter}". Retorne apenas o nome limpo da cidade.`;
+        let prompt = `Identifique a cidade exata de: "${cityFilter}". Retorne apenas o nome limpo.`;
         
-        // Changed model to gemini-2.5-flash as it is required for Google Maps grounding
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: prompt,
@@ -66,16 +65,17 @@ export const Search: React.FC = () => {
             setCityFilter(response.text.trim().replace(/\.$/, ''));
         }
 
+        // Extrair Links de Grounding do Maps conforme instrução obrigatória
         const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
         if (chunks) {
             const links = chunks.map((c: any) => ({
                 url: c.maps?.uri || '',
-                title: c.maps?.title || 'Fonte: Google Maps'
+                title: c.maps?.title || 'Google Maps Source'
             })).filter((l: any) => l.url);
             setGroundingLinks(links);
         }
     } catch (error) {
-        console.error("Erro na busca por mapas:", error);
+        console.error(error);
     } finally {
         setIsResolvingCity(false);
     }
@@ -148,7 +148,7 @@ export const Search: React.FC = () => {
 
               {groundingLinks.length > 0 && (
                   <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl space-y-2 animate-fadeIn">
-                      <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">Fontes Grounding:</p>
+                      <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">Fonte (Maps Grounding):</p>
                       {groundingLinks.map((link, idx) => (
                           <a key={idx} href={link.url} target="_blank" rel="noopener noreferrer" className="block text-[10px] text-blue-500 underline font-bold truncate">
                               {link.title}
@@ -185,6 +185,7 @@ export const Search: React.FC = () => {
         <div className="w-full lg:w-3/4">
           <div className="mb-6 flex justify-between items-center text-sm text-gray-500 px-2">
             <span><strong>{filteredItems.length}</strong> itens encontrados</span>
+            {userLocation && <span className="text-green-600 font-bold"><i className="fas fa-bolt"></i> Mais próximos primeiro</span>}
           </div>
           
           {filteredItems.length > 0 ? (
@@ -197,6 +198,7 @@ export const Search: React.FC = () => {
             <div className="text-center py-32 bg-white rounded-2xl border-2 border-dashed border-gray-200">
               <i className="fas fa-search text-5xl text-gray-200 mb-6"></i>
               <p className="text-xl text-gray-500 font-bold">Nenhum resultado</p>
+              <p className="text-gray-400 mt-2">Tente mudar os filtros ou o termo de busca.</p>
             </div>
           )}
         </div>

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { UserPlan, UserType } from '../types';
+import { UserPlan } from '../types';
 import { useAuth } from '../context/AuthContext';
 
 interface UpgradeModalProps {
@@ -10,139 +10,86 @@ interface UpgradeModalProps {
 }
 
 export const UpgradeModal: React.FC<UpgradeModalProps> = ({ currentPlan, itemCount, onClose }) => {
-  const { user, confirmarPagamento } = useAuth();
+  const { confirmarPagamento } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handlePay = async (valor: number) => {
     setIsProcessing(true);
-    // Simulação de gateway de pagamento
-    setTimeout(async () => {
-        await confirmarPagamento(valor);
-        setIsProcessing(false);
-        onClose();
-    }, 1500);
+    await confirmarPagamento(valor);
+    setIsProcessing(false);
+    onClose();
   };
 
   const isFree = currentPlan === UserPlan.FREE;
+  const isBasic = currentPlan === UserPlan.BASIC;
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-[500] animate-fadeIn">
-      <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-4xl overflow-hidden border border-gray-100 flex flex-col md:flex-row transform transition-all max-h-[90vh] overflow-y-auto no-scrollbar">
-        
-        {/* Lado Esquerdo: Hero/Contexto */}
-        <div className="w-full md:w-1/3 bg-brand-600 p-10 text-white flex flex-col justify-center relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32"></div>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[100] animate-fadeIn">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 flex flex-col transform transition-all">
+        {/* Header Visual */}
+        <div className="bg-brand-600 p-8 text-center text-white relative">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
             <div className="relative z-10">
-                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mb-6 border border-white/30">
+                <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-white/30">
                     <i className="fas fa-rocket text-2xl"></i>
                 </div>
-                <h3 className="text-3xl font-black mb-4 leading-tight uppercase tracking-tighter">Alcance mais pessoas</h3>
-                <p className="text-brand-50 text-sm font-medium leading-relaxed">
-                    Você atingiu o limite de <span className="font-black">1 anúncio ativo</span> do plano gratuito. 
-                    Escolha o plano ideal para continuar crescendo.
-                </p>
-                
-                <div className="mt-10 pt-10 border-t border-white/20">
-                    <p className="text-[10px] font-black uppercase tracking-widest opacity-60">Sua conta atual</p>
-                    <p className="text-lg font-bold">{currentPlan}</p>
-                </div>
+                <h3 className="text-2xl font-black mb-1">Limite Atingido!</h3>
+                <p className="text-brand-100 text-sm font-medium">Você atingiu o limite do seu plano atual.</p>
             </div>
         </div>
 
-        {/* Lado Direito: Planos */}
-        <div className="flex-1 p-8 md:p-12 bg-white">
-            <div className="flex justify-between items-center mb-10">
-                <h4 className="font-black text-gray-900 text-2xl tracking-tighter uppercase">Escolha seu Nível</h4>
-                <button onClick={onClose} className="text-gray-300 hover:text-gray-500 transition-colors"><i className="fas fa-times text-xl"></i></button>
+        {/* Content */}
+        <div className="p-8">
+            <div className="text-center mb-8">
+                <p className="text-gray-500 text-sm mb-4">
+                    Sua conta <strong>{currentPlan}</strong> permite até {isFree ? '2' : '10'} anúncios ativos. 
+                    Você já possui <strong>{itemCount}</strong>.
+                </p>
+                <h4 className="font-black text-gray-900 text-xl tracking-tight">Escolha seu novo nível:</h4>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                
-                {/* Plano Individual (PF) */}
-                <div className={`p-8 rounded-[2.5rem] border-2 transition-all relative flex flex-col ${user?.userType === UserType.PF ? 'border-brand-500 bg-brand-50/20' : 'border-gray-100 bg-gray-50/50'}`}>
-                    {user?.userType === UserType.PF && (
-                        <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white text-[9px] font-black px-4 py-1 rounded-full uppercase tracking-widest shadow-md">Recomendado</span>
-                    )}
-                    <div className="mb-6">
-                        <h5 className="font-black text-gray-900 text-lg uppercase tracking-tight">Plano Individual</h5>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Ideal para Pessoa Física</p>
+            <div className="space-y-4">
+                {/* Opção Plano Básico (Apenas para Free) */}
+                {isFree && (
+                    <div className="p-5 border-2 border-brand-100 rounded-2xl bg-brand-50/30 flex justify-between items-center group hover:border-brand-500 transition-colors">
+                        <div>
+                            <h5 className="font-black text-brand-900">Plano Básico</h5>
+                            <p className="text-xs text-brand-700 font-bold uppercase tracking-widest">Até 10 Itens</p>
+                        </div>
+                        <button 
+                            disabled={isProcessing}
+                            onClick={() => handlePay(9.99)}
+                            className="bg-brand-600 hover:bg-brand-700 text-white px-6 py-2.5 rounded-xl font-black text-sm shadow-md transition disabled:opacity-50"
+                        >
+                            {isProcessing ? <i className="fas fa-spinner fa-spin"></i> : 'R$ 9,99'}
+                        </button>
                     </div>
-                    
-                    <div className="mb-8">
-                        <span className="text-3xl font-black text-gray-900">R$ 9,99</span>
-                        <span className="text-xs text-gray-400 font-bold uppercase ml-1">/mês</span>
+                )}
+
+                {/* Opção Plano Premium */}
+                {(isFree || isBasic) && (
+                    <div className="p-5 border-2 border-secondary-100 rounded-2xl bg-secondary-50/20 flex justify-between items-center group hover:border-secondary-500 transition-colors">
+                        <div>
+                            <h5 className="font-black text-secondary-600">Plano Premium</h5>
+                            <p className="text-xs text-secondary-500 font-bold uppercase tracking-widest">Itens Ilimitados</p>
+                        </div>
+                        <button 
+                            disabled={isProcessing}
+                            onClick={() => handlePay(29.99)}
+                            className="bg-secondary-500 hover:bg-secondary-600 text-white px-6 py-2.5 rounded-xl font-black text-sm shadow-md transition disabled:opacity-50"
+                        >
+                            {isProcessing ? <i className="fas fa-spinner fa-spin"></i> : 'R$ 29,99'}
+                        </button>
                     </div>
-
-                    <ul className="space-y-4 mb-10 flex-1">
-                        <li className="flex items-center gap-3 text-xs font-bold text-gray-600">
-                            <i className="fas fa-check text-brand-500"></i> Até 5 anúncios ativos
-                        </li>
-                        <li className="flex items-center gap-3 text-xs font-bold text-gray-600">
-                            <i className="fas fa-check text-brand-500"></i> Visibilidade Padrão
-                        </li>
-                        <li className="flex items-center gap-3 text-xs font-bold text-gray-600">
-                            <i className="fas fa-check text-brand-500"></i> Chat ilimitado
-                        </li>
-                        <li className="flex items-center gap-3 text-xs font-bold text-gray-600">
-                            <i className="fas fa-check text-brand-500"></i> Estatísticas básicas
-                        </li>
-                    </ul>
-
-                    <button 
-                        disabled={isProcessing}
-                        onClick={() => handlePay(9.99)}
-                        className="w-full bg-brand-500 hover:bg-brand-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-brand-100 transition transform active:scale-95 disabled:opacity-50"
-                    >
-                        {isProcessing ? <i className="fas fa-spinner fa-spin"></i> : 'Assinar Individual'}
-                    </button>
-                </div>
-
-                {/* Plano Empresarial (PJ) */}
-                <div className={`p-8 rounded-[2.5rem] border-2 transition-all relative flex flex-col ${user?.userType === UserType.PJ ? 'border-secondary-500 bg-secondary-50/20' : 'border-gray-100 bg-gray-50/50'}`}>
-                    {user?.userType === UserType.PJ && (
-                        <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-secondary-500 text-white text-[9px] font-black px-4 py-1 rounded-full uppercase tracking-widest shadow-md">Recomendado</span>
-                    )}
-                    <div className="mb-6">
-                        <h5 className="font-black text-gray-900 text-lg uppercase tracking-tight">Plano Empresarial</h5>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Foco em Locadoras (PJ)</p>
-                    </div>
-                    
-                    <div className="mb-8">
-                        <span className="text-3xl font-black text-gray-900">R$ 49,99</span>
-                        <span className="text-xs text-gray-400 font-bold uppercase ml-1">/mês</span>
-                    </div>
-
-                    <ul className="space-y-4 mb-10 flex-1">
-                        <li className="flex items-center gap-3 text-xs font-bold text-gray-600">
-                            <i className="fas fa-check text-secondary-500"></i> Anúncios Ilimitados
-                        </li>
-                        <li className="flex items-center gap-3 text-xs font-bold text-gray-600">
-                            <i className="fas fa-check text-secondary-500"></i> Destaque nas buscas
-                        </li>
-                        <li className="flex items-center gap-3 text-xs font-bold text-gray-600">
-                            <i className="fas fa-check text-secondary-500"></i> Selo Empresa Verificada
-                        </li>
-                        <li className="flex items-center gap-3 text-xs font-bold text-gray-600">
-                            <i className="fas fa-check text-secondary-500"></i> Dashboard Inteligente
-                        </li>
-                        <li className="flex items-center gap-3 text-xs font-bold text-gray-600">
-                            <i className="fas fa-check text-secondary-500"></i> Suporte Prioritário
-                        </li>
-                    </ul>
-
-                    <button 
-                        disabled={isProcessing}
-                        onClick={() => handlePay(49.99)}
-                        className="w-full bg-secondary-500 hover:bg-secondary-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-secondary-100 transition transform active:scale-95 disabled:opacity-50"
-                    >
-                        {isProcessing ? <i className="fas fa-spinner fa-spin"></i> : 'Assinar Empresarial'}
-                    </button>
-                </div>
+                )}
             </div>
 
-            <p className="mt-10 text-center text-[10px] text-gray-400 font-bold uppercase tracking-tighter">
-                Pagamento recorrente mensal. Você pode cancelar a qualquer momento no painel.
-            </p>
+            <button 
+                onClick={onClose}
+                className="w-full mt-8 py-3 text-xs font-bold text-gray-400 hover:text-gray-600 transition uppercase tracking-widest"
+            >
+                Continuar gerenciando atuais
+            </button>
         </div>
       </div>
     </div>

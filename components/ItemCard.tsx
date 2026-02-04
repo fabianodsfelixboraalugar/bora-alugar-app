@@ -14,7 +14,6 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
   
   const owner = getUserById(item.ownerId);
   const isVerified = owner?.verificationStatus === VerificationStatus.VERIFIED;
-  const hasVideo = !!item.videoUrl;
 
   const handleContactOwner = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -28,18 +27,9 @@ export const ItemCard: React.FC<ItemCardProps> = ({ item }) => {
       <Link to={`/item/${item.id}`} className="block relative">
         <div className="aspect-[4/3] overflow-hidden bg-gray-50">
           <img src={item.images[0]} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition duration-700" />
-          
-          {/* Badge de Categoria */}
           <div className="absolute top-4 right-4 bg-white/90 backdrop-blur px-3 py-1.5 rounded-xl text-[10px] font-black text-brand-600 shadow-sm z-10 uppercase tracking-widest border border-brand-100">
             {item.category}
           </div>
-
-          {/* Indicador de Vídeo */}
-          {hasVideo && (
-            <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur text-white px-2 py-1 rounded-lg text-[10px] font-black flex items-center gap-1.5 z-10 border border-white/20">
-              <i className="fas fa-play text-[8px]"></i> VÍDEO
-            </div>
-          )}
         </div>
       </Link>
       

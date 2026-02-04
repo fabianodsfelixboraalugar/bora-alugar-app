@@ -3,7 +3,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { UserType } from '../types';
-import { BackButton } from '../components/BackButton';
 
 export const Register: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -22,7 +21,6 @@ export const Register: React.FC = () => {
     confirmPassword: ''
   });
 
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const { register, isValidTaxId } = useAuth();
   const navigate = useNavigate();
   const [error, setError] = useState('');
@@ -34,6 +32,43 @@ export const Register: React.FC = () => {
   const emailInputRef = useRef<HTMLDivElement>(null);
   
   const commonDomains = ['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'icloud.com', 'live.com'];
+
+  // --- FUNCIONALIDADE DE TESTE ---
+  const fillTestUser = (role: 'ALUGADOR' | 'LOCATARIO') => {
+    if (role === 'ALUGADOR') {
+      setFormData({
+        name: 'João Alugador Teste',
+        email: 'joao.alugador@teste.com',
+        taxId: '123.456.789-00',
+        userType: UserType.PF,
+        zipCode: '01310-100',
+        address: 'Avenida Paulista',
+        addressNumber: '1000',
+        complement: 'Sala 10',
+        neighborhood: 'Bela Vista',
+        city: 'São Paulo',
+        state: 'SP',
+        password: '123',
+        confirmPassword: '123'
+      });
+    } else {
+      setFormData({
+        name: 'Maria Locatária Teste',
+        email: 'maria.locataria@teste.com',
+        taxId: '987.654.321-11',
+        userType: UserType.PF,
+        zipCode: '22041-001',
+        address: 'Rua Figueiredo de Magalhães',
+        addressNumber: '500',
+        complement: 'Apto 202',
+        neighborhood: 'Copacabana',
+        city: 'Rio de Janeiro',
+        state: 'RJ',
+        password: '123',
+        confirmPassword: '123'
+      });
+    }
+  };
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -127,11 +162,6 @@ export const Register: React.FC = () => {
     e.preventDefault();
     setError('');
 
-    if (!acceptedTerms) {
-      setError("Você deve aceitar os Termos de Uso e a Política de Privacidade para continuar.");
-      return;
-    }
-
     if (!isValidTaxId(formData.taxId, formData.userType)) {
       setError(`O ${formData.userType === UserType.PF ? 'CPF' : 'CNPJ'} inserido é inválido.`);
       return;
@@ -168,12 +198,27 @@ export const Register: React.FC = () => {
   const labelStyle = "block text-[10px] font-bold text-gray-400 uppercase mb-1 ml-1";
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4 py-12">
-      <div className="mb-6 w-full max-w-2xl">
-        <BackButton label="Voltar" />
-      </div>
-
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
       <div className="max-w-2xl w-full bg-white rounded-3xl shadow-xl p-10 border border-brand-100 animate-fadeIn relative">
+        
+        {/* BOTÕES DE TESTE RÁPIDO */}
+        <div className="absolute top-6 left-6 flex gap-2 z-20">
+          <button 
+            type="button"
+            onClick={() => fillTestUser('ALUGADOR')}
+            className="bg-brand-50 hover:bg-brand-100 text-brand-700 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-tighter border border-brand-200 shadow-sm transition"
+          >
+            <i className="fas fa-magic mr-1"></i> Alugador
+          </button>
+          <button 
+            type="button"
+            onClick={() => fillTestUser('LOCATARIO')}
+            className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-tighter border border-blue-200 shadow-sm transition"
+          >
+            <i className="fas fa-magic mr-1"></i> Locatário
+          </button>
+        </div>
+
         <div className="text-center mb-10">
           <div className="w-16 h-16 bg-brand-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-brand-200">
              <i className="fas fa-user-plus text-brand-600 text-2xl"></i>
@@ -332,19 +377,6 @@ export const Register: React.FC = () => {
                       />
                   </div>
               </div>
-          </div>
-
-          <div className="flex items-start gap-3 p-2">
-            <input 
-              id="accept-terms-register"
-              type="checkbox" 
-              checked={acceptedTerms} 
-              onChange={e => setAcceptedTerms(e.target.checked)}
-              className="mt-1 w-5 h-5 text-brand-600 border-gray-300 rounded focus:ring-brand-500 cursor-pointer"
-            />
-            <label htmlFor="accept-terms-register" className="text-xs text-gray-500 font-medium leading-relaxed cursor-pointer select-none">
-              Li e concordo com os <Link to="/termos" className="text-brand-600 hover:underline">Termos de Uso</Link> e a <Link to="/privacidade" className="text-brand-600 hover:underline">Política de Privacidade</Link>.
-            </label>
           </div>
 
           {error && <p className="text-red-500 text-[10px] font-black uppercase tracking-tight text-center animate-pulse"><i className="fas fa-exclamation-triangle mr-1"></i> {error}</p>}

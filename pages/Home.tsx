@@ -21,6 +21,7 @@ export const Home: React.FC = () => {
   const [fallbackZipCode, setFallbackZipCode] = useState('');
   const [isSearchingZip, setIsSearchingZip] = useState(false);
 
+  // --- 1. SOLICITAÇÃO DE LOCALIZAÇÃO CONDICIONADA AO LOGIN ---
   useEffect(() => {
     if (!isAuthenticated && !userLocation) {
         setLocationStatus('prompt');
@@ -49,10 +50,9 @@ export const Home: React.FC = () => {
           if (process.env.API_KEY) {
               try {
                   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-                  // Changed model to gemini-2.5-flash as it is required for Google Maps grounding
                   const response = await ai.models.generateContent({
                       model: "gemini-2.5-flash",
-                      contents: "Retorne APENAS o nome da cidade desta localização geográfica. Não responda nada além do nome da cidade.",
+                      contents: "Retorne APENAS o nome da cidade desta localização.",
                       config: {
                           tools: [{ googleMaps: {} }],
                           toolConfig: {
@@ -78,6 +78,7 @@ export const Home: React.FC = () => {
     requestLocation();
   }, [isAuthenticated, setUserLocation, userLocation]);
 
+  // --- 2. FALLBACK POR CEP ---
   const handleZipFallback = async (e: React.FormEvent) => {
     e.preventDefault();
     if (fallbackZipCode.length < 8) return;
@@ -99,6 +100,7 @@ export const Home: React.FC = () => {
     }
   };
 
+  // --- 3. LÓGICA DE ORDENAÇÃO PRIORITÁRIA (MAIS PRÓXIMO PRIMEIRO) ---
   const displayedItems = useMemo(() => {
     let processedItems = [...items];
 
@@ -129,6 +131,7 @@ export const Home: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Hero Section */}
       <section className="relative bg-brand-900 pt-16 pb-20 lg:pt-24 lg:pb-32 overflow-hidden">
         <div className="absolute inset-0 opacity-20 bg-[url('https://images.unsplash.com/photo-1556761175-5973dc0f32e7?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80')] bg-cover bg-center"></div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-white">
@@ -152,6 +155,7 @@ export const Home: React.FC = () => {
             </button>
           </form>
 
+          {/* --- BANNER CTA SUPERIOR --- */}
           <div className="max-w-md mx-auto mb-10 animate-fadeIn">
             <div className="bg-brand-600 rounded-3xl p-6 md:p-8 text-center text-white relative overflow-hidden shadow-2xl border border-white/10 transition-transform hover:scale-[1.02] duration-300">
                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
@@ -174,6 +178,7 @@ export const Home: React.FC = () => {
             </div>
           </div>
 
+          {/* Localização Feedback */}
           <div className="mt-6 flex flex-col items-center min-h-[40px]">
             {locationStatus === 'loading' && (
                <div className="flex items-center gap-3 text-brand-100 bg-brand-800/40 px-6 py-2.5 rounded-full backdrop-blur-md border border-white/10">
@@ -215,6 +220,7 @@ export const Home: React.FC = () => {
         </div>
       </section>
 
+      {/* Categorias Section */}
       <section className="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <h2 className="text-xl font-bold text-gray-900 mb-8 flex items-center gap-3">
             <span className="w-8 h-1 bg-brand-600 rounded-full"></span>
@@ -236,6 +242,7 @@ export const Home: React.FC = () => {
         </div>
       </section>
 
+      {/* Grid de Itens */}
       <section className="py-12 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-end mb-8">
@@ -282,7 +289,45 @@ export const Home: React.FC = () => {
                     <ItemCard key={item.id} item={item} />
                   ))
               )}
+              
+              {locationStatus !== 'loading' && displayedItems.length === 0 && (
+                  <div className="col-span-full text-center py-20 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
+                      <div className="bg-white w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                          <i className="fas fa-map-marked-alt text-3xl text-gray-300"></i>
+                      </div>
+                      <p className="text-gray-500 font-bold">Nenhum item encontrado no raio de {searchRadius}km.</p>
+                      <button 
+                        onClick={() => setSearchRadius(prev => prev + 50)}
+                        className="mt-4 bg-brand-600 text-white px-6 py-2 rounded-xl font-bold text-sm shadow-md transition hover:bg-brand-700"
+                      >
+                        Aumentar raio de busca
+                      </button>
+                  </div>
+              )}
           </div>
+        </div>
+      </section>
+
+      {/* Rodapé CTA */}
+      <section className="py-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="bg-brand-600 rounded-[2.5rem] p-10 md:p-16 text-center text-white relative overflow-hidden shadow-2xl">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32"></div>
+                <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 rounded-full -ml-24 -mb-24"></div>
+                
+                <div className="relative z-10">
+                    <h2 className="text-3xl md:text-5xl font-black mb-6">Transforme objetos em renda extra</h2>
+                    <p className="text-lg opacity-90 mb-10 max-w-2xl mx-auto font-medium">
+                        Tem uma furadeira, câmera ou barraca parada? Anuncie hoje e comece a ganhar dinheiro com o que você já tem.
+                    </p>
+                    <button 
+                        onClick={() => isAuthenticated ? navigate('/add-item') : navigate('/login')} 
+                        className="bg-white text-brand-700 hover:bg-brand-50 px-10 py-4 rounded-2xl font-black text-lg shadow-xl transition transform hover:-translate-y-1 active:scale-95"
+                    >
+                        Anunciar Grátis
+                    </button>
+                </div>
+            </div>
         </div>
       </section>
     </div>

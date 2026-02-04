@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { get, set } from 'idb-keyval';
-import { Item, Rental, Review, RentalStatus, Message, User, VerificationStatus, Notification, NotificationType, TrustStats, AppLog } from '../types';
+import { Item, Rental, Review, RentalStatus, Message, User, VerificationStatus, Notification, NotificationType, TrustStats } from '../types';
 import { MOCK_ITEMS, MOCK_REVIEWS, MOCK_USERS } from '../mockData';
 
 interface Coords {
@@ -15,7 +15,6 @@ interface DataContextType {
   reviews: Review[];
   messages: Message[];
   notifications: Notification[];
-  logs: AppLog[];
   userLocation: Coords | null;
   setUserLocation: (coords: Coords | null) => void;
   addItem: (item: Item) => void;
@@ -42,8 +41,6 @@ interface DataContextType {
   markNotificationAsRead: (notificationId: string) => void;
   clearNotifications: (userId: string) => void;
   checkItemAvailability: (itemId: string, startDate: string, endDate: string) => boolean;
-  addLog: (action: string, details: string, userId?: string, userEmail?: string) => Promise<void>;
-  clearLogs: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -72,41 +69,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [reviews, setReviews] = useState<Review[]>(MOCK_REVIEWS);
   const [messages, setMessages] = useState<Message[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [logs, setLogs] = useState<AppLog[]>([]);
   const [userLocation, setUserLocationState] = useState<Coords | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [userIp, setUserIp] = useState<string>('0.0.0.0');
 
   useEffect(() => {
-    const fetchIp = async () => {
-      try {
-        const res = await fetch('https://api.ipify.org?format=json');
-        const data = await res.json();
-        setUserIp(data.ip);
-      } catch (e) {
-        console.warn("Could not fetch user IP, using fallback.");
-      }
-    };
-    fetchIp();
-
     const loadData = async () => {
       try {
-        // Fixed: Removed type arguments from get calls to avoid untyped function error
-        const [storedItems, storedRentals, storedReviews, storedMessages, storedNotifications, storedLogs] = await Promise.all([
-          get('app_items'),
-          get('app_rentals'),
-          get('app_reviews'),
-          get('app_messages'),
-          get('app_notifications'),
-          get('app_audit_logs')
+        const [storedItems, storedRentals, storedReviews, storedMessages, storedNotifications] = await Promise.all([
+          get<Item[]>('app_items'),
+          get<Rental[]>('app_rentals'),
+          get<Review[]>('app_reviews'),
+          get<Message[]>('app_messages'),
+          get<Notification[]>('app_notifications')
         ]);
 
-        if (storedItems) setItems(storedItems as Item[]);
-        if (storedRentals) setRentals(storedRentals as Rental[]);
-        if (storedReviews) setReviews(storedReviews as Review[]);
-        if (storedMessages) setMessages(storedMessages as Message[]);
-        if (storedNotifications) setNotifications(storedNotifications as Notification[]);
-        if (storedLogs) setLogs(storedLogs as AppLog[]);
+        if (storedItems) setItems(storedItems);
+        if (storedRentals) setRentals(storedRentals);
+        if (storedReviews) setReviews(storedReviews);
+        if (storedMessages) setMessages(storedMessages);
+        if (storedNotifications) setNotifications(storedNotifications);
         
         const savedLoc = sessionStorage.getItem('user_coords');
         if (savedLoc) setUserLocationState(JSON.parse(savedLoc));
@@ -119,24 +100,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loadData();
   }, []);
 
-  const addLog = async (action: string, details: string, userId?: string, userEmail?: string) => {
-    const newLog: AppLog = {
-      id: 'log_' + Date.now() + Math.random().toString(36).substr(2, 5),
-      timestamp: new Date().toISOString(),
-      action,
-      details,
-      userId,
-      userEmail,
-      ip: userIp
-    };
-    setLogs(prev => [newLog, ...prev]);
-  };
-
-  const clearLogs = async () => {
-    setLogs([]);
-    await set('app_audit_logs', []);
-  };
-
   const setUserLocation = (coords: Coords | null) => {
     setUserLocationState(coords);
     if (coords) sessionStorage.setItem('user_coords', JSON.stringify(coords));
@@ -148,7 +111,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => { if (isLoaded) set('app_reviews', reviews); }, [reviews, isLoaded]);
   useEffect(() => { if (isLoaded) set('app_messages', messages); }, [messages, isLoaded]);
   useEffect(() => { if (isLoaded) set('app_notifications', notifications); }, [notifications, isLoaded]);
-  useEffect(() => { if (isLoaded) set('app_audit_logs', logs); }, [logs, isLoaded]);
 
   const addNotification = (userId: string, type: NotificationType, title: string, message: string, link: string, relatedId?: string) => {
     const newNotif: Notification = {
@@ -173,16 +135,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setNotifications(prev => prev.filter(n => n.userId !== userId));
   };
 
-  const addItem = (item: Item) => {
-    setItems(prev => [item, ...prev]);
-    addLog('CRIAÇÃO_ANÚNCIO', `Anúncio criado: ${item.title}`, item.ownerId, item.ownerName);
-  };
-  
-  const removeItem = (itemId: string) => {
-    const item = items.find(i => i.id === itemId);
-    setItems(prev => prev.filter(i => i.id !== itemId));
-    if (item) addLog('EXCLUSÃO_ANÚNCIO', `Anúncio removido: ${item.title}`, item.ownerId);
-  };
+  const addItem = (item: Item) => setItems(prev => [item, ...prev]);
+  const removeItem = (itemId: string) => setItems(prev => prev.filter(i => i.id !== itemId));
   
   const updateItem = (itemId: string, data: Partial<Item>) => {
     setItems(prev => prev.map(item => item.id === itemId ? { ...item, ...data } : item));
@@ -198,7 +152,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       '/dashboard',
       rental.id
     );
-    addLog('SOLICITAÇÃO_ALUGUEL', `Pedido de aluguel para ${rental.itemTitle}`, rental.renterId);
   };
   
   const updateRentalStatus = (id: string, status: RentalStatus) => {
@@ -215,23 +168,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         rentalToUpdate.id
       );
 
+      // Não alteramos item.available para false permanentemente aqui, pois agora controlamos por datas no detalhe.
+      // No entanto, para compatibilidade com a busca atual que filtra por item.available:
       if (status === RentalStatus.CANCELLED) {
         updateItem(rentalToUpdate.itemId, { available: true });
       }
-      addLog('ATUALIZAÇÃO_ALUGUEL', `Status do aluguel ${id} alterado para ${status}`);
     }
   };
 
   const checkItemAvailability = (itemId: string, startDate: string, endDate: string) => {
     const start = new Date(startDate);
     const end = new Date(endDate);
+    
+    // Consideramos apenas aluguéis que estão em estados que ocupam o item
     const conflictingRentals = rentals.filter(r => 
       r.itemId === itemId && 
       [RentalStatus.CONFIRMED, RentalStatus.ACTIVE, RentalStatus.SHIPPED, RentalStatus.DELIVERED].includes(r.status)
     );
+
     return !conflictingRentals.some(r => {
       const rStart = new Date(r.startDate);
       const rEnd = new Date(r.endDate);
+      // Sobreposição de intervalos: (NovoInício <= ExistenteFim) E (NovoFim >= ExistenteInício)
       return start <= rEnd && end >= rStart;
     });
   };
@@ -241,7 +199,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setRentals(prev => prev.filter(r => r.ownerId !== userId && r.renterId !== userId));
     setMessages(prev => prev.filter(m => m.senderId !== userId && m.receiverId !== userId));
     setNotifications(prev => prev.filter(n => n.userId !== userId));
-    addLog('LIMPEZA_DADOS', `Dados associados ao usuário ${userId} removidos.`);
   };
 
   const completeRental = async (rentalId: string) => {
@@ -267,14 +224,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateItem(newReview.itemId, { rating: Number(avg.toFixed(1)), reviewCount: itemReviews.length });
     }
 
-    // Fixed: Removed type argument from get call to avoid untyped function error
-    const currentUsers = ((await get('app_users_db')) as User[] | undefined) || [];
+    const currentUsers = await get<User[]>('app_users_db') || [];
     const targetUserId = newReview.reviewedId;
     const targetUser = currentUsers.find(u => u.id === targetUserId);
 
     if (targetUser) {
         const userReviews = updatedReviews.filter(r => r.reviewedId === targetUserId);
         const avgRating = userReviews.reduce((sum, r) => sum + r.rating, 0) / userReviews.length;
+        
         const score = Math.min(100, Math.round(avgRating * 20));
         let level: TrustStats['level'] = 'NEUTRAL';
         if (score < 40) level = 'RISK';
@@ -299,7 +256,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const updatedUsers = currentUsers.map(u => u.id === targetUserId ? { ...u, trustStats: updatedStats } : u);
         await set('app_users_db', updatedUsers);
     }
-    addLog('AVALIAÇÃO_POSTADA', `Usuário ${newReview.reviewerId} avaliou ${newReview.reviewedId} com nota ${newReview.rating}`);
   };
 
   const sendMessage = (senderId: string, receiverId: string, content: string) => {
@@ -328,7 +284,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMessages(prev => prev.filter(m => m.id !== messageId));
   };
 
-  // Fixed: Replaced user.id with userId parameter which was undefined in this scope
   const deleteConversation = (userId: string, partnerId: string) => {
     setMessages(prev => prev.filter(m => 
       !((m.senderId === userId && m.receiverId === partnerId) || 
@@ -354,6 +309,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const matchesCity = city ? item.city.toLowerCase().includes(city.toLowerCase()) : true;
       return isAvailable && matchesQuery && matchesCategory && matchesCity;
     });
+
     if (userLocation) {
         result = result.map(item => {
             if (item.lat && item.lng) {
@@ -362,18 +318,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return item;
         }).sort((a, b) => (a.distance || 99999) - (b.distance || 99999));
     }
+
     return result;
   };
 
   return (
     <DataContext.Provider value={{ 
-      items, rentals, reviews, messages, notifications, logs, userLocation, setUserLocation,
+      items, rentals, reviews, messages, notifications, userLocation, setUserLocation,
       addItem, removeItem, updateItem, addRental, updateRentalStatus, completeRental,
       processRefund, submitReview, sendMessage, markAsRead, deleteMessage, 
       deleteConversation, clearAllMessages, getItemById, getRentalsByUserId, 
       getRentalsByOwnerId, getReviewByTransaction, searchItems, calculateDistance: calculateDistanceKm,
-      deleteUserData, addNotification, markNotificationAsRead, clearNotifications, checkItemAvailability,
-      addLog, clearLogs
+      deleteUserData, addNotification, markNotificationAsRead, clearNotifications, checkItemAvailability
     }}>
       {children}
     </DataContext.Provider>

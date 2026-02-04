@@ -1,5 +1,6 @@
 
 import React, { useMemo, useState } from 'react';
+// Import useNavigate to handle navigation
 import { useNavigate } from 'react-router-dom';
 import { User, Item, Rental, RentalStatus, UserPlan, ItemStatus, Category } from '../types';
 import { useData } from '../context/DataContext';
@@ -11,39 +12,43 @@ interface PjDashboardViewProps {
 }
 
 export const PjDashboardView: React.FC<PjDashboardViewProps> = ({ user, items, rentals }) => {
+  // Initialize navigate function
   const navigate = useNavigate();
   const { updateItem } = useData();
   const [filterCategory, setFilterCategory] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [historyItem, setHistoryItem] = useState<Item | null>(null);
 
+  // --- LÓGICA DE MÉTRICAS ESTRATÉGICAS ---
   const stats = useMemo(() => {
     const validRentals = rentals.filter(r => [RentalStatus.COMPLETED, RentalStatus.ACTIVE, RentalStatus.CONFIRMED].includes(r.status));
     
+    // 1. Faturamento Mensal (Últimos 30 dias)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     const monthlyRevenue = validRentals
       .filter(r => new Date(r.createdAt) >= thirtyDaysAgo)
       .reduce((sum, r) => sum + r.totalPrice, 0);
 
+    // 2. Taxa de Ocupação
     const rentedItemsCount = items.filter(i => !i.available || i.status === ItemStatus.RENTED).length;
     const occupancyRate = items.length > 0 ? (rentedItemsCount / items.length) * 100 : 0;
 
+    // 3. Status de Inventário
     const inMaintenance = items.filter(i => i.status === ItemStatus.MAINTENANCE).length;
     const available = items.filter(i => i.available && i.status !== ItemStatus.MAINTENANCE).length;
+    const rented = rentedItemsCount;
 
+    // 4. Item Estrela (Mais alugado)
     const itemCounts = rentals.reduce((acc, r) => {
       acc[r.itemId] = (acc[r.itemId] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 
-    const keys = Object.keys(itemCounts);
-    const starItemId = keys.length > 0 
-        ? keys.reduce((a, b) => itemCounts[a] > itemCounts[b] ? a : b) 
-        : '';
-        
+    const starItemId = Object.keys(itemCounts).reduce((a, b) => itemCounts[a] > itemCounts[b] ? a : b, '');
     const starItem = items.find(i => i.id === starItemId);
 
+    // 5. Evolução 7 Dias (Simulação baseada em rentals reais)
     const last7Days = Array.from({ length: 7 }).map((_, i) => {
       const date = new Date();
       date.setDate(date.getDate() - (6 - i));
@@ -52,6 +57,7 @@ export const PjDashboardView: React.FC<PjDashboardViewProps> = ({ user, items, r
       return { day: date.toLocaleDateString('pt-BR', { weekday: 'short' }), count };
     });
 
+    // 6. Alertas de Ação
     const alerts = [];
     if (inMaintenance > 0) alerts.push({ type: 'warning', text: `${inMaintenance} itens em manutenção precisam de atenção.` });
     const planLimit = user.plan === UserPlan.FREE ? 2 : user.plan === UserPlan.BASIC ? 10 : 999;
@@ -62,7 +68,7 @@ export const PjDashboardView: React.FC<PjDashboardViewProps> = ({ user, items, r
       alerts.push({ type: 'info', text: `Você tem solicitações pendentes aguardando sua confirmação.` });
     }
 
-    return { monthlyRevenue, occupancyRate, inventory: { inMaintenance, available, rented: rentedItemsCount }, starItem, last7Days, alerts };
+    return { monthlyRevenue, occupancyRate, inventory: { inMaintenance, available, rented }, starItem, last7Days, alerts };
   }, [items, rentals, user.plan]);
 
   const handleToggle = (item: Item) => {
@@ -81,11 +87,12 @@ export const PjDashboardView: React.FC<PjDashboardViewProps> = ({ user, items, r
       new Date(r.startDate) <= now && new Date(r.endDate) >= now
     );
 
-    if (hasActiveRental) return { label: 'ALUGADO', class: 'bg-blue-100 text-blue-700' };
-    if (item.available) return { label: 'DISPONÍVEL', class: 'bg-brand-50 text-brand-700' };
-    return { label: 'INDISPONÍVEL', class: 'bg-gray-100 text-gray-400' };
+    if (hasActiveRental) return { label: 'ALUGADO', class: 'bg-blue-100 text-blue-700 font-black' };
+    if (item.available) return { label: 'DISPONÍVEL', class: 'bg-brand-100 text-brand-700 font-black' };
+    return { label: 'INDISPONÍVEL', class: 'bg-gray-100 text-gray-400 font-black' };
   };
 
+  // Filtros da tabela
   const filteredItems = items.filter(i => {
     const matchesCat = filterCategory ? i.category === filterCategory : true;
     const matchesStat = filterStatus ? (filterStatus === 'Disponível' ? i.available : !i.available) : true;
@@ -94,6 +101,7 @@ export const PjDashboardView: React.FC<PjDashboardViewProps> = ({ user, items, r
 
   return (
     <div className="space-y-8 animate-fadeIn pb-12 bg-[#F8FAF9]">
+      {/* Modal de Histórico */}
       {historyItem && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4 animate-fadeIn">
           <div className="bg-white rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl border border-gray-100 flex flex-col max-h-[80vh]">
@@ -147,20 +155,19 @@ export const PjDashboardView: React.FC<PjDashboardViewProps> = ({ user, items, r
         </div>
       )}
 
+      {/* Header Corporativo com Alertas */}
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between px-2">
             <div>
-                <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Painel da Locadora</h2>
+                <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">PAINEL DA LOCADORA</h2>
                 <p className="text-gray-500 text-sm font-medium">Gestão de Ativos e Inteligência de Negócios</p>
             </div>
-            <button 
-              onClick={() => navigate('/add-item')}
-              className="bg-brand-500 text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-brand-100 transition transform active:scale-95"
-            >
-                <i className="fas fa-plus mr-2"></i> Adicionar Item
+            <button className="bg-brand-500 text-white px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-brand-100 transition transform active:scale-95">
+                <i className="fas fa-plus mr-2"></i> Adicionar Lote
             </button>
         </div>
 
+        {/* Action Alerts Component */}
         {stats.alerts.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {stats.alerts.map((alert, idx) => (
@@ -176,6 +183,7 @@ export const PjDashboardView: React.FC<PjDashboardViewProps> = ({ user, items, r
         )}
       </div>
 
+      {/* Grid de Métricas (Cards Brancos Modernos) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 hover:shadow-md transition group">
            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Taxa de Ocupação</p>
@@ -231,8 +239,9 @@ export const PjDashboardView: React.FC<PjDashboardViewProps> = ({ user, items, r
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Gráfico de Evolução 7 Dias */}
         <div className="lg:col-span-1 bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
-           <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-8">Novas Reservas (7d)</h3>
+           <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-8">NOVAS RESERVAS (7D)</h3>
            <div className="flex items-end justify-between h-48 gap-3 px-2">
               {stats.last7Days.map((d, i) => (
                 <div key={i} className="flex-1 flex flex-col items-center gap-2 group cursor-help">
@@ -248,9 +257,10 @@ export const PjDashboardView: React.FC<PjDashboardViewProps> = ({ user, items, r
            </div>
         </div>
 
+        {/* Tabela de Gestão de Inventário */}
         <div className="lg:col-span-2 bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
            <div className="p-8 border-b border-gray-50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">Gestão de Inventário</h3>
+              <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">GESTÃO DE INVENTÁRIO</h3>
               <div className="flex gap-2">
                  <select 
                    className="text-[10px] font-bold text-gray-500 border border-gray-100 rounded-xl px-4 py-2 outline-none focus:ring-1 focus:ring-brand-500 bg-gray-50"
@@ -276,10 +286,10 @@ export const PjDashboardView: React.FC<PjDashboardViewProps> = ({ user, items, r
               <table className="w-full text-left">
                  <thead>
                     <tr className="text-[10px] font-black uppercase text-gray-400 border-b border-gray-50">
-                       <th className="px-4 py-4">Item</th>
-                       <th className="px-4 py-4">Diária</th>
-                       <th className="px-4 py-4">Status</th>
-                       <th className="px-4 py-4 text-right">Ações</th>
+                       <th className="px-4 py-4">ITEM</th>
+                       <th className="px-4 py-4">DIÁRIA</th>
+                       <th className="px-4 py-4">STATUS</th>
+                       <th className="px-4 py-4 text-right">AÇÕES</th>
                     </tr>
                  </thead>
                  <tbody className="divide-y divide-gray-50">
@@ -291,12 +301,12 @@ export const PjDashboardView: React.FC<PjDashboardViewProps> = ({ user, items, r
                         <tr key={item.id} className="hover:bg-gray-50/50 transition group">
                            <td className="px-4 py-4">
                               <div className="flex items-center gap-3">
-                                 <div className="w-10 h-10 rounded-xl bg-gray-100 overflow-hidden shadow-sm">
+                                 <div className="w-10 h-10 rounded-xl bg-gray-100 overflow-hidden shadow-sm border border-gray-100">
                                     <img src={item.images[0]} className="w-full h-full object-cover" alt="" />
                                  </div>
                                  <div className="min-w-0">
-                                    <p className="text-xs font-black text-gray-900 truncate">{item.title}</p>
-                                    <p className="text-[9px] text-gray-400 font-bold uppercase">{item.category}</p>
+                                    <p className="text-xs font-black text-gray-900 truncate uppercase">{item.title}</p>
+                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tight">{item.category}</p>
                                  </div>
                               </div>
                            </td>
@@ -307,7 +317,7 @@ export const PjDashboardView: React.FC<PjDashboardViewProps> = ({ user, items, r
                               </span>
                            </td>
                            <td className="px-4 py-4 text-right">
-                              <div className="flex justify-end gap-1.5">
+                              <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                  <button 
                                    onClick={() => handleToggle(item)}
                                    title={item.available ? "Marcar como Indisponível" : "Marcar como Disponível"}
