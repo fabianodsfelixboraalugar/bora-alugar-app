@@ -22,21 +22,6 @@ export const Login: React.FC = () => {
   const emailInputRef = useRef<HTMLDivElement>(null);
   const commonDomains = ['gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'icloud.com'];
 
-  // --- FUNCIONALIDADE DE TESTE RÁPIDO ---
-  const fillTestUser = (role: 'ALUGADOR' | 'LOCATARIO' | 'MASTER') => {
-    setLoginError(false);
-    if (role === 'ALUGADOR') {
-      setEmail('joao.alugador@teste.com');
-      setPassword('123');
-    } else if (role === 'LOCATARIO') {
-      setEmail('maria.locataria@teste.com');
-      setPassword('123');
-    } else if (role === 'MASTER') {
-      setEmail('*fabianodsfelix@gmail.com');
-      setPassword('84265.+-*/');
-    }
-  };
-
   useEffect(() => {
     const savedEmail = localStorage.getItem('saved_email');
     if (savedEmail) {
@@ -195,33 +180,7 @@ export const Login: React.FC = () => {
       )}
 
       <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 border border-gray-100 animate-fadeIn relative">
-        
-        {/* BOTÕES DE TESTE RÁPIDO */}
-        <div className="absolute top-6 left-6 flex flex-wrap gap-2 z-20">
-          <button 
-            type="button"
-            onClick={() => fillTestUser('ALUGADOR')}
-            className="bg-brand-50 hover:bg-brand-100 text-brand-700 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-tighter border border-brand-200 shadow-sm transition"
-          >
-            Alugador
-          </button>
-          <button 
-            type="button"
-            onClick={() => fillTestUser('LOCATARIO')}
-            className="bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-tighter border border-blue-200 shadow-sm transition"
-          >
-            Locatário
-          </button>
-          <button 
-            type="button"
-            onClick={() => fillTestUser('MASTER')}
-            className="bg-red-50 hover:bg-red-100 text-red-700 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-tighter border border-red-200 shadow-sm transition"
-          >
-            <i className="fas fa-crown mr-1"></i> Admin Master
-          </button>
-        </div>
-
-        <div className="text-center mb-8 mt-6">
+        <div className="text-center mb-8">
           <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight">Entrar</h2>
           <p className="text-gray-500 mt-2 font-medium">Acesse sua conta para alugar e anunciar</p>
         </div>
@@ -289,7 +248,7 @@ export const Login: React.FC = () => {
               </label>
             </div>
             <button 
-              type="button"
+              type="button" 
               onClick={openRecovery}
               className="text-xs font-bold text-brand-600 hover:underline uppercase tracking-tighter"
             >

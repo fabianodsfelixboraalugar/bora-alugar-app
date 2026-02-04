@@ -1,16 +1,27 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
 
-// https://vitejs.dev/config/
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
 export default defineConfig({
   plugins: [react()],
+  define: {
+    'process.env': {}
+  },
   build: {
     outDir: 'dist',
-    // Otimizações para mobile
-    target: 'esnext',
+    sourcemap: false,
     minify: 'esbuild',
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          supabase: ['@supabase/supabase-js']
+        }
+      }
+    }
   },
   server: {
-    host: true
+    host: true,
+    port: 3000
   }
-})
+});

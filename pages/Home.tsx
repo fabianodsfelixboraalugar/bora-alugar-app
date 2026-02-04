@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { GoogleGenAI } from "@google/genai";
+import { aiService } from '../services/aiService';
 import { useData } from '../context/DataContext';
 import { useAuth } from '../context/AuthContext';
 import { ItemCard } from '../components/ItemCard';
@@ -10,7 +10,7 @@ import { Category } from '../types';
 
 export const Home: React.FC = () => {
   const { items, userLocation, setUserLocation, calculateDistance } = useData();
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   
   const [searchTerm, setSearchTerm] = useState('');
@@ -21,7 +21,6 @@ export const Home: React.FC = () => {
   const [fallbackZipCode, setFallbackZipCode] = useState('');
   const [isSearchingZip, setIsSearchingZip] = useState(false);
 
-  // --- 1. SOLICITAÇÃO DE LOCALIZAÇÃO CONDICIONADA AO LOGIN ---
   useEffect(() => {
     if (!isAuthenticated && !userLocation) {
         setLocationStatus('prompt');
@@ -47,25 +46,8 @@ export const Home: React.FC = () => {
           setUserLocation({ lat: latitude, lng: longitude });
           setLocationStatus('success');
           
-          if (process.env.API_KEY) {
-              try {
-                  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-                  const response = await ai.models.generateContent({
-                      model: "gemini-2.5-flash",
-                      contents: "Retorne APENAS o nome da cidade desta localização.",
-                      config: {
-                          tools: [{ googleMaps: {} }],
-                          toolConfig: {
-                              retrievalConfig: {
-                                  latLng: { latitude, longitude }
-                              }
-                          }
-                      },
-                  });
-                  const city = response.text?.trim().replace(/\.$/, '');
-                  if (city) setCurrentCity(city);
-              } catch (err) { console.error(err); }
-          }
+          const city = await aiService.resolveCityFromCoords(latitude, longitude);
+          if (city) setCurrentCity(city);
         },
         (error) => {
           console.warn("Localização negada:", error);
@@ -78,7 +60,6 @@ export const Home: React.FC = () => {
     requestLocation();
   }, [isAuthenticated, setUserLocation, userLocation]);
 
-  // --- 2. FALLBACK POR CEP ---
   const handleZipFallback = async (e: React.FormEvent) => {
     e.preventDefault();
     if (fallbackZipCode.length < 8) return;
@@ -100,7 +81,6 @@ export const Home: React.FC = () => {
     }
   };
 
-  // --- 3. LÓGICA DE ORDENAÇÃO PRIORITÁRIA (MAIS PRÓXIMO PRIMEIRO) ---
   const displayedItems = useMemo(() => {
     let processedItems = [...items];
 
@@ -131,7 +111,6 @@ export const Home: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Hero Section */}
       <section className="relative bg-brand-900 pt-16 pb-20 lg:pt-24 lg:pb-32 overflow-hidden">
         <div className="absolute inset-0 opacity-20 bg-[url('https://images.unsplash.com/photo-1556761175-5973dc0f32e7?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80')] bg-cover bg-center"></div>
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-white">
@@ -155,22 +134,15 @@ export const Home: React.FC = () => {
             </button>
           </form>
 
-          {/* --- BANNER CTA SUPERIOR --- */}
           <div className="max-w-md mx-auto mb-10 animate-fadeIn">
             <div className="bg-brand-600 rounded-3xl p-6 md:p-8 text-center text-white relative overflow-hidden shadow-2xl border border-white/10 transition-transform hover:scale-[1.02] duration-300">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
-                <div className="absolute bottom-0 left-0 w-24 h-24 bg-black/10 rounded-full -ml-12 -mb-12"></div>
-                
                 <div className="relative z-10">
                     <h2 className="text-xl md:text-2xl font-black mb-3 leading-tight uppercase tracking-tight">
                         Transforme objetos em renda extra
                     </h2>
-                    <p className="text-sm opacity-90 mb-6 font-medium leading-snug">
-                        Tem uma furadeira, câmera ou barraca parada? Anuncie hoje e comece a ganhar dinheiro com o que você já tem.
-                    </p>
                     <button 
                         onClick={() => isAuthenticated ? navigate('/add-item') : navigate('/login')} 
-                        className="bg-white text-brand-700 hover:bg-brand-50 px-10 py-3.5 rounded-2xl font-black text-base shadow-xl transition transform active:scale-95 flex items-center justify-center gap-2 mx-auto"
+                        className="bg-white text-brand-700 hover:bg-brand-50 px-10 py-3.5 rounded-2xl font-black text-base shadow-xl transition transform active:scale-95"
                     >
                         Anunciar Grátis
                     </button>
@@ -178,49 +150,22 @@ export const Home: React.FC = () => {
             </div>
           </div>
 
-          {/* Localização Feedback */}
           <div className="mt-6 flex flex-col items-center min-h-[40px]">
             {locationStatus === 'loading' && (
                <div className="flex items-center gap-3 text-brand-100 bg-brand-800/40 px-6 py-2.5 rounded-full backdrop-blur-md border border-white/10">
                   <i className="fas fa-circle-notch fa-spin"></i> 
-                  <span className="text-sm font-medium">Buscando as melhores ofertas perto de você...</span>
+                  <span className="text-sm font-medium">Buscando as melhores ofertas...</span>
                </div>
             )}
-            
-            {locationStatus === 'denied' && (
-              <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/20 max-w-md w-full animate-fadeIn">
-                <p className="text-sm text-brand-100 mb-3 font-medium">
-                  <i className="fas fa-map-marker-slash mr-2"></i> 
-                  Localização desativada. Informe seu CEP para ver itens na sua região:
-                </p>
-                <form onSubmit={handleZipFallback} className="flex gap-2">
-                  <input 
-                    type="text" 
-                    placeholder="Ex: 01310-100"
-                    className="flex-1 bg-white text-gray-900 px-4 py-2 rounded-xl text-sm outline-none focus:ring-2 focus:ring-brand-500"
-                    value={fallbackZipCode}
-                    onChange={e => setFallbackZipCode(e.target.value)}
-                  />
-                  <button 
-                    disabled={isSearchingZip}
-                    className="bg-brand-600 px-5 py-2 rounded-xl font-bold text-sm hover:bg-brand-500 transition shadow-md"
-                  >
-                    {isSearchingZip ? <i className="fas fa-spinner fa-spin"></i> : 'Aplicar'}
-                  </button>
-                </form>
-              </div>
-            )}
-            
             {locationStatus === 'success' && currentCity && (
                <div className="text-brand-100 text-xs font-bold flex items-center gap-2 bg-green-900/30 px-5 py-2 rounded-full border border-green-500/30 animate-fadeIn">
-                  <i className="fas fa-map-marker-alt text-green-400"></i> Mostrando itens próximos a <span className="text-white">{currentCity}</span>
+                  <i className="fas fa-map-marker-alt text-green-400"></i> Próximos a <span className="text-white">{currentCity}</span>
                </div>
             )}
           </div>
         </div>
       </section>
 
-      {/* Categorias Section */}
       <section className="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <h2 className="text-xl font-bold text-gray-900 mb-8 flex items-center gap-3">
             <span className="w-8 h-1 bg-brand-600 rounded-full"></span>
@@ -228,11 +173,7 @@ export const Home: React.FC = () => {
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-4">
           {categories.map((cat, idx) => (
-            <button 
-              key={idx}
-              onClick={() => navigate(`/search?category=${cat}`)}
-              className="flex flex-col items-center p-4 bg-white rounded-2xl shadow-sm hover:shadow-lg hover:border-brand-200 transition border border-gray-100 group"
-            >
+            <button key={idx} onClick={() => navigate(`/search?category=${cat}`)} className="flex flex-col items-center p-4 bg-white rounded-2xl shadow-sm hover:shadow-lg transition border border-gray-100 group">
               <div className="w-12 h-12 bg-brand-50 rounded-full flex items-center justify-center text-brand-600 mb-3 group-hover:bg-brand-600 group-hover:text-white transition-all">
                 <i className={`fas fa-${getIconForCategory(cat)}`}></i>
               </div>
@@ -242,36 +183,23 @@ export const Home: React.FC = () => {
         </div>
       </section>
 
-      {/* Grid de Itens */}
       <section className="py-12 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-end mb-8">
             <div>
                 <h2 className="text-2xl font-black text-gray-900 tracking-tight">
-                {userLocation ? 'Perto de Você' : 'Novidades no Bora Alugar'}
+                  {userLocation ? 'Perto de Você' : 'Novidades no Bora Alugar'}
                 </h2>
-                <p className="text-gray-500 text-sm mt-1">
-                    {userLocation ? 'Itens disponíveis a poucos minutos da sua localização.' : 'Veja o que acabou de chegar na plataforma.'}
-                </p>
             </div>
-            
             {userLocation && (
                 <div className="relative">
-                    <button 
-                        onClick={() => setShowRadiusFilter(!showRadiusFilter)}
-                        className="flex items-center gap-2 text-xs font-bold text-brand-700 bg-brand-50 px-4 py-2.5 rounded-xl border border-brand-100 hover:bg-brand-100 transition shadow-sm"
-                    >
-                        <i className="fas fa-sliders-h"></i> Raio: {searchRadius}km <i className="fas fa-chevron-down text-[10px]"></i>
+                    <button onClick={() => setShowRadiusFilter(!showRadiusFilter)} className="flex items-center gap-2 text-xs font-bold text-brand-700 bg-brand-50 px-4 py-2.5 rounded-xl border border-brand-100 transition shadow-sm">
+                        Raio: {searchRadius}km <i className="fas fa-chevron-down text-[10px]"></i>
                     </button>
                     {showRadiusFilter && (
                         <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 py-2 animate-fadeIn">
-                            <p className="px-4 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Ajustar Distância</p>
                             {[5, 10, 25, 50, 100].map(km => (
-                                <button
-                                    key={km}
-                                    onClick={() => { setSearchRadius(km); setShowRadiusFilter(false); }}
-                                    className={`w-full text-left px-4 py-2.5 text-sm font-bold ${searchRadius === km ? 'bg-brand-50 text-brand-700 border-l-4 border-brand-600' : 'text-gray-600 hover:bg-gray-50'}`}
-                                >
+                                <button key={km} onClick={() => { setSearchRadius(km); setShowRadiusFilter(false); }} className={`w-full text-left px-4 py-2.5 text-sm font-bold ${searchRadius === km ? 'bg-brand-50 text-brand-700 border-l-4 border-brand-600' : 'text-gray-600 hover:bg-gray-50'}`}>
                                     Até {km} km
                                 </button>
                             ))}
@@ -285,49 +213,9 @@ export const Home: React.FC = () => {
               {locationStatus === 'loading' ? (
                   Array(8).fill(0).map((_, i) => <ItemSkeleton key={i} />)
               ) : (
-                  displayedItems.map(item => (
-                    <ItemCard key={item.id} item={item} />
-                  ))
-              )}
-              
-              {locationStatus !== 'loading' && displayedItems.length === 0 && (
-                  <div className="col-span-full text-center py-20 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-200">
-                      <div className="bg-white w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
-                          <i className="fas fa-map-marked-alt text-3xl text-gray-300"></i>
-                      </div>
-                      <p className="text-gray-500 font-bold">Nenhum item encontrado no raio de {searchRadius}km.</p>
-                      <button 
-                        onClick={() => setSearchRadius(prev => prev + 50)}
-                        className="mt-4 bg-brand-600 text-white px-6 py-2 rounded-xl font-bold text-sm shadow-md transition hover:bg-brand-700"
-                      >
-                        Aumentar raio de busca
-                      </button>
-                  </div>
+                  displayedItems.map(item => <ItemCard key={item.id} item={item} />)
               )}
           </div>
-        </div>
-      </section>
-
-      {/* Rodapé CTA */}
-      <section className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="bg-brand-600 rounded-[2.5rem] p-10 md:p-16 text-center text-white relative overflow-hidden shadow-2xl">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32"></div>
-                <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 rounded-full -ml-24 -mb-24"></div>
-                
-                <div className="relative z-10">
-                    <h2 className="text-3xl md:text-5xl font-black mb-6">Transforme objetos em renda extra</h2>
-                    <p className="text-lg opacity-90 mb-10 max-w-2xl mx-auto font-medium">
-                        Tem uma furadeira, câmera ou barraca parada? Anuncie hoje e comece a ganhar dinheiro com o que você já tem.
-                    </p>
-                    <button 
-                        onClick={() => isAuthenticated ? navigate('/add-item') : navigate('/login')} 
-                        className="bg-white text-brand-700 hover:bg-brand-50 px-10 py-4 rounded-2xl font-black text-lg shadow-xl transition transform hover:-translate-y-1 active:scale-95"
-                    >
-                        Anunciar Grátis
-                    </button>
-                </div>
-            </div>
         </div>
       </section>
     </div>

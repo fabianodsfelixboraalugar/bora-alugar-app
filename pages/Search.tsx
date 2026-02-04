@@ -45,11 +45,7 @@ export const Search: React.FC = () => {
   }, [items, query, selectedCategory, cityFilter, priceRange, userLocation, calculateDistance]);
 
   const resolveCityWithMaps = async () => {
-    if (!process.env.API_KEY) {
-        alert("API Key não configurada.");
-        return;
-    }
-    
+    // API key is obtained directly from process.env.API_KEY as per guidelines
     setIsResolvingCity(true);
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
