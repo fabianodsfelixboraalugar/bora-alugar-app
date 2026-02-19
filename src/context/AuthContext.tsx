@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { get, set } from 'idb-keyval';
 import { supabase, IS_PREVIEW } from '../lib/supabase';
-import { User, AuthState, UserPlan, VerificationStatus, UserType, UserRole } from '../types';
+import type { User, AuthState, UserPlan, VerificationStatus, UserType, UserRole } from '../types';
 import { MOCK_USERS } from '../mockData';
 
 interface AuthContextType extends AuthState {
