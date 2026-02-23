@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+export const IS_PREVIEW = import.meta.env.VITE_IS_PREVIEW === 'true' || false;
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
